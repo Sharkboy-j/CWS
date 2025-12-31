@@ -1,7 +1,7 @@
 version: "2.1"
 services:
   CWS:
-    image: ghcr.io/rebell81/cws:latest
+    image: ghcr.io/sharkboy-j/cws:latest
     container_name: CWS
     environment:
       - qb_host=

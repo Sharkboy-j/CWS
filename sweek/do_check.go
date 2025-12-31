@@ -15,7 +15,7 @@ import (
 )
 
 const rutrackerHostStr = "rutracker"
-const rutrackerHostStr2 = "t-ru"
+const rutrackerHostStr2 = "t-ru.org"
 
 func doCheck(ctx context.Context, config *config.Config) error {
 	torrents, err := qBit.GetTorrents(ctx, qBittorrentClient)
