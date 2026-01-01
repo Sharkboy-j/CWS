@@ -46,6 +46,7 @@ jobs:
     - name: Build
       run: go build -v ./...
 
+
   docker-build-push:
     runs-on: [self-hosted, pi-docker]
     needs: build
