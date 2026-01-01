@@ -34,7 +34,7 @@ RUN addgroup -g 1000 appuser && \
 COPY --from=builder /build/cws .
 
 # Copy migrations directory
-COPY --from=builder /build/database/migrations ./database/migrations
+COPY --from=builder /build/store/migrations ./store/migrations
 
 # Set ownership of all files
 RUN chown -R appuser:appuser /app
