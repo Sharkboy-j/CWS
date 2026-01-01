@@ -66,6 +66,9 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 			tgbotapi.NewInlineKeyboardButtonData("📥 Добавить торрент файл", "add_torrent_file"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔎 Поиск торрента", "search_torrent"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📊 Мониторинг торрента", "monitor_torrent"),
 		),
 	)

@@ -22,9 +22,9 @@ type TorrentMonitor struct {
 }
 
 type TorrentMonitorService struct {
-	repo            *database.Repository
-	msgSender       *MessageSender
-	stateMgr        *StateManager
+	repo              *database.Repository
+	msgSender         *MessageSender
+	stateMgr          *StateManager
 	torrentMonitoring map[int64]*TorrentMonitor
 }
 
@@ -39,13 +39,11 @@ func NewTorrentMonitorService(repo *database.Repository, msgSender *MessageSende
 
 // StartTorrentMonitoring запускает мониторинг прогресса торрента
 func (tms *TorrentMonitorService) StartTorrentMonitoring(ctx context.Context, chatId int64, clientID int64, hash string) {
-	// Останавливаем предыдущий мониторинг, если есть
 	if monitor, exists := tms.torrentMonitoring[chatId]; exists {
 		close(monitor.Stop)
 		delete(tms.torrentMonitoring, chatId)
 	}
 
-	// Создаем новый мониторинг
 	monitor := &TorrentMonitor{
 		ChatID:   chatId,
 		ClientID: clientID,
@@ -54,10 +52,9 @@ func (tms *TorrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 	}
 	tms.torrentMonitoring[chatId] = monitor
 
-	// Показываем начальное сообщение
 	client, err := tms.repo.GetClientByID(ctx, clientID, chatId)
 	if err == nil && client != nil {
-		text := fmt.Sprintf("✅ *Торрент успешно добавлен*\n\nКлиент: *%s*\n\n⏳ Обработка...", client.Name)
+		text := fmt.Sprintf("✅ *\n\nКлиент: *%s*\n\n⏳ Обработка...", client.Name)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
@@ -67,7 +64,6 @@ func (tms *TorrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 		tms.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	}
 
-	// Запускаем горутину для мониторинга
 	go tms.monitorTorrentProgress(ctx, monitor)
 }
 
@@ -81,10 +77,8 @@ func (tms *TorrentMonitorService) StopTorrentMonitoring(chatId int64) {
 
 // monitorTorrentProgress периодически обновляет информацию о прогрессе торрента
 func (tms *TorrentMonitorService) monitorTorrentProgress(ctx context.Context, monitor *TorrentMonitor) {
-	// Ждем немного перед первым обновлением, чтобы торрент успел появиться в qBittorrent
 	time.Sleep(1 * time.Second)
 
-	// Первое обновление сразу
 	tms.updateTorrentProgress(ctx, monitor)
 
 	ticker := time.NewTicker(2 * time.Second)
@@ -119,14 +113,12 @@ func (tms *TorrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 		return
 	}
 
-	// Получаем информацию о торренте
 	torrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
 	if err != nil {
 		logger.Warn("Ошибка при получении торрентов для мониторинга: %v", err)
 		return
 	}
 
-	// Ищем торрент по hash
 	var torrent *qbittorrent.Torrent
 	hashUpper := strings.ToUpper(monitor.Hash)
 	for i := range torrents {
@@ -138,9 +130,7 @@ func (tms *TorrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 
 	if torrent == nil {
 		logger.Debug("Торрент не найден для мониторинга, hash: %s, продолжаем попытки...", monitor.Hash)
-		// Не останавливаем мониторинг сразу, продолжаем попытки
-		// Обновляем сообщение о том, что торрент еще обрабатывается
-		text := fmt.Sprintf("✅ *Торрент успешно добавлен*\n\nКлиент: *%s*\n\n⏳ Торрент обрабатывается qBittorrent...\n\n_Обработка..._", client.Name)
+		text := fmt.Sprintf("✅ \n\nКлиент: *%s*\n\n⏳ Торрент обрабатывается qBittorrent...\n\n_Обработка..._", client.Name)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
@@ -151,22 +141,17 @@ func (tms *TorrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 		return
 	}
 
-	// Вычисляем количество пиров (сиды + личеры)
-	// NumIncomplete - это количество неполных копий (личеры)
 	numPeers := int(torrent.NumSeeds) + int(torrent.NumIncomplete)
 
-	// Получаем свойства торрента для извлечения URL из комментария
 	var torrentURL string
 	props, err := qbClient.GetTorrentPropertiesCtx(ctx, monitor.Hash)
 	if err == nil {
 		torrentURL = tms.extractURLFromComment(props.Comment)
 	}
 
-	// Форматируем информацию о прогрессе
 	text := tms.formatTorrentProgress(torrent, client.Name, numPeers)
 
 	var rows [][]tgbotapi.InlineKeyboardButton
-	// Добавляем кнопку со ссылкой, если URL найден
 	if torrentURL != "" {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonURL("🔗 Открыть раздачу", torrentURL),
@@ -217,7 +202,6 @@ func (tms *TorrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 		progress = torrent.Progress * 100
 	}
 
-	// Форматируем размеры
 	formatSize := func(bytes int64) string {
 		const unit = 1024
 		if bytes < unit {

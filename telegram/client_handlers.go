@@ -22,8 +22,9 @@ type ClientHandler struct {
 	missingTorrentsCache map[int64][]missingTorrentInfo
 	checkResultsCache    map[int64]*CheckResultsCache
 	torrentFilesCache    map[int64]*TorrentFileCache
-	torrentMonitorCache  map[int64]*TorrentMonitorCache // Кэш торрентов для выбора мониторинга
-	torrentMonitorSvc    *TorrentMonitorService         // Сервис мониторинга торрентов
+	torrentMonitorCache  map[int64]*TorrentMonitorCache
+	torrentMonitorSvc    *TorrentMonitorService
+	torrentSearchSvc     *TorrentSearchService
 }
 
 type TorrentMonitorCache struct {
@@ -42,10 +43,10 @@ type TorrentFileCache struct {
 	FileData     []byte
 	SavePaths    []string
 	DefaultPath  string
-	ExistingPath string // Путь из существующего торрента с таким же хешем
-	TorrentName  string // Название торрента
-	SelectedPath string // Выбранный путь сохранения
-	ExistingHash string // Hash существующего торрента (если найден)
+	ExistingPath string
+	TorrentName  string
+	SelectedPath string
+	ExistingHash string
 }
 
 type CheckResultsCache struct {
@@ -66,6 +67,7 @@ func NewClientHandler(repo *database.Repository, msgSender *MessageSender, state
 		torrentFilesCache:    make(map[int64]*TorrentFileCache),
 		torrentMonitorCache:  make(map[int64]*TorrentMonitorCache),
 		torrentMonitorSvc:    NewTorrentMonitorService(repo, msgSender, stateMgr),
+		torrentSearchSvc:     NewTorrentSearchService(repo, msgSender, stateMgr),
 	}
 }
 
@@ -160,7 +162,6 @@ func (ch *ClientHandler) ShowDeleteConfirmation(chatId int64, clientID int64) {
 func (ch *ClientHandler) DeleteClient(chatId int64, clientID int64) {
 	ctx := context.Background()
 
-	// Сначала получаем имя клиента для сообщения
 	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиента %d для удаления пользователем %d: %v", clientID, chatId, err)
@@ -178,7 +179,6 @@ func (ch *ClientHandler) DeleteClient(chatId int64, clientID int64) {
 
 	clientName := client.Name
 
-	// Удаляем клиента
 	err = ch.repo.DeleteClient(ctx, clientID, chatId)
 	if err != nil {
 		logger.Error("Ошибка при удалении клиента %d для пользователя %d: %v", clientID, chatId, err)
@@ -325,15 +325,11 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 		logger.Error("Ошибка при подключении к qBit клиенту для мониторинга: %v", err)
 		// Продолжаем без списка торрентов
 	} else {
-		// Получаем список торрентов
 		torrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
 		if err == nil && len(torrents) > 0 {
-			// Сортируем по времени добавления (более новые первыми)
-			// Создаем копию для сортировки
 			sortedTorrents := make([]qbittorrent.Torrent, len(torrents))
 			copy(sortedTorrents, torrents)
 
-			// Сортируем по AddedOn (более новые первыми)
 			for i := 0; i < len(sortedTorrents)-1; i++ {
 				for j := i + 1; j < len(sortedTorrents); j++ {
 					if sortedTorrents[i].AddedOn < sortedTorrents[j].AddedOn {
@@ -342,13 +338,11 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 				}
 			}
 
-			// Берем три последних
 			maxTorrents := 3
 			if len(sortedTorrents) < maxTorrents {
 				maxTorrents = len(sortedTorrents)
 			}
 
-			// Сохраняем торренты в кэш
 			var monitorItems []TorrentMonitorItem
 			for i := 0; i < maxTorrents; i++ {
 				torrent := sortedTorrents[i]
@@ -374,9 +368,7 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 				text := "📊 *Мониторинг торрента*\n\nВыберите торрент или введите хеш вручную:"
 				var rows [][]tgbotapi.InlineKeyboardButton
 
-				// Добавляем кнопки с последними торрентами (используем индекс вместо hash)
 				for i, item := range monitorItems {
-					// Обрезаем название если слишком длинное
 					name := item.Name
 					if len(name) > 40 {
 						name = name[:37] + "..."
@@ -409,7 +401,6 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 		}
 	}
 
-	// Если не удалось получить торренты, показываем обычный диалог ввода
 	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("monitor_torrent_hash_%d", clientID))
 	text := "📊 *Мониторинг торрента*\n\nВведите хеш торрента для мониторинга:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -492,7 +483,6 @@ func (ch *ClientHandler) StartAddTorrentDialog(chatId int64, clientID int64) {
 			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
 		),
 	)
-	// Используем GetMenuMessage, чтобы редактировать то же сообщение, где был список клиентов
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
@@ -519,7 +509,6 @@ func (ch *ClientHandler) HandleTorrentFileReceived(ctx context.Context, chatId i
 		return
 	}
 
-	// Парсим торрент файл для извлечения хеша
 	torrentInfo, err := qBit.ParseTorrentFile(fileData)
 	if err != nil {
 		logger.Warn("Ошибка при парсинге торрент файла: %v", err)
@@ -531,7 +520,6 @@ func (ch *ClientHandler) HandleTorrentFileReceived(ctx context.Context, chatId i
 	var torrentName string
 	if torrentInfo != nil {
 		torrentName = torrentInfo.Name
-		// Проверяем, есть ли уже торрент с таким названием
 		allTorrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
 		if err == nil {
 			existingTorrent := qBit.FindTorrentByName(allTorrents, torrentInfo.Name)
@@ -581,7 +569,6 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 
-	// Если найден существующий торрент с таким же хешем, предлагаем его путь первым
 	if existingPath != "" {
 		text += fmt.Sprintf("⭐ *Рекомендуется* (используется для этого торрента):\n`%s`\n\n", existingPath)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
@@ -609,7 +596,6 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 			if shownCount >= 10 {
 				break
 			}
-			// Пропускаем путь, если он уже показан как рекомендуемый или по умолчанию
 			if path == existingPath || path == defaultPath {
 				continue
 			}
@@ -632,7 +618,6 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-	// Используем GetMenuMessage, чтобы редактировать то же сообщение
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
@@ -653,7 +638,6 @@ func (ch *ClientHandler) HandleSavePathSelection(chatId int64, clientID int64, p
 
 	var savePath string
 	if pathIndex == -2 {
-		// Используем путь из существующего торрента
 		savePath = cache.ExistingPath
 		if savePath == "" {
 			logger.Warn("Путь из существующего торрента не найден")
@@ -672,11 +656,9 @@ func (ch *ClientHandler) HandleSavePathSelection(chatId int64, clientID int64, p
 		return
 	}
 
-	// Сохраняем выбранный путь в кэш
 	cache.SelectedPath = savePath
 	ch.torrentFilesCache[chatId] = cache
 
-	// Показываем вопрос о пропуске проверки хеша
 	ch.ShowSkipHashCheckQuestion(chatId, clientID, savePath)
 }
 
@@ -688,7 +670,6 @@ func (ch *ClientHandler) StartCustomSavePathDialog(chatId int64, clientID int64)
 			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
 		),
 	)
-	// Используем GetMenuMessage, чтобы редактировать то же сообщение
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
@@ -710,7 +691,6 @@ func (ch *ClientHandler) ShowSkipHashCheckQuestion(chatId int64, clientID int64,
 			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
 		),
 	)
-	// Используем GetMenuMessage, чтобы редактировать то же сообщение
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
@@ -753,15 +733,12 @@ func (ch *ClientHandler) AddTorrentToClient(ctx context.Context, chatId int64, c
 		return
 	}
 
-	// Проверяем, был ли найден существующий торрент
 	cache, exists := ch.torrentFilesCache[chatId]
 	if exists && cache != nil && cache.ExistingHash != "" {
-		// Предлагаем удалить старый торрент
 		ch.ShowDeleteExistingTorrentQuestion(chatId, clientID, cache.ExistingHash, cache.TorrentName)
 		return
 	}
 
-	// Получаем hash нового торрента из файла (fileData доступен как параметр)
 	var newTorrentHash string
 	torrentInfo, err := qBit.ParseTorrentFile(fileData)
 	if err == nil && torrentInfo != nil {
@@ -774,7 +751,6 @@ func (ch *ClientHandler) AddTorrentToClient(ctx context.Context, chatId int64, c
 	ch.stateMgr.DeleteUserState(chatId)
 	delete(ch.torrentFilesCache, chatId)
 
-	// Если удалось получить hash, начинаем мониторинг
 	if newTorrentHash != "" {
 		logger.Debug("Запуск мониторинга торрента для пользователя %d, hash: %s", chatId, newTorrentHash)
 		ch.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, newTorrentHash)
@@ -809,8 +785,7 @@ func (ch *ClientHandler) HandleSkipHashCheckSelection(chatId int64, clientID int
 
 // ShowDeleteExistingTorrentQuestion показывает вопрос об удалении существующего торрента
 func (ch *ClientHandler) ShowDeleteExistingTorrentQuestion(chatId int64, clientID int64, existingHash string, torrentName string) {
-	// Hash уже сохранен в кэше, используем только clientID в callback
-	text := fmt.Sprintf("✅ *Торрент успешно добавлен*\n\n⚠️ Найден существующий торрент с таким же названием:\n`%s`\n\n❓ Удалить старый торрент?", torrentName)
+	text := fmt.Sprintf("✅ \n\n⚠️ Найден существующий торрент с таким же названием:\n`%s`\n\n❓ Удалить старый торрент?", torrentName)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("✅ Да, удалить", fmt.Sprintf("delete_existing_torrent_%d", clientID)),
@@ -828,7 +803,6 @@ func (ch *ClientHandler) ShowDeleteExistingTorrentQuestion(chatId int64, clientI
 
 // ShowDeleteFilesQuestion показывает вопрос об удалении файлов вместе с торрентом
 func (ch *ClientHandler) ShowDeleteFilesQuestion(chatId int64, clientID int64, hash string) {
-	// Hash уже сохранен в кэше, используем только clientID в callback
 	text := "🗑️ *Удаление торрента*\n\n❓ Удалить файлы вместе с торрентом?\n\n_Если выбрать \"Да\", файлы будут удалены с диска._"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -877,7 +851,6 @@ func (ch *ClientHandler) HandleDeleteExistingTorrent(chatId int64, clientID int6
 
 	ch.stateMgr.DeleteUserState(chatId)
 
-	// Получаем hash нового торрента из кэша и начинаем мониторинг
 	cache, exists := ch.torrentFilesCache[chatId]
 	var newTorrentHash string
 	if exists && cache != nil {
@@ -899,7 +872,6 @@ func (ch *ClientHandler) HandleDeleteExistingTorrent(chatId int64, clientID int6
 		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 	}
 
-	// Если удалось получить hash нового торрента, начинаем мониторинг
 	if newTorrentHash != "" {
 		ch.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, newTorrentHash)
 	} else {
@@ -929,7 +901,6 @@ func (ch *ClientHandler) HandleKeepExistingTorrent(chatId int64, clientID int64)
 	ch.stateMgr.DeleteUserState(chatId)
 	delete(ch.torrentFilesCache, chatId)
 
-	// Если удалось получить hash, начинаем мониторинг
 	if newTorrentHash != "" {
 		logger.Debug("Запуск мониторинга торрента для пользователя %d, hash: %s", chatId, newTorrentHash)
 		ch.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, newTorrentHash)
