@@ -48,7 +48,7 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	case data == "check_torrents":
 		ch.clientHdlr.CheckAllClients(chatId)
 	case data == "add_client":
-		logger.Info("Пользователь %d начал добавление нового клиента", chatId)
+		logger.Debugf("Пользователь %d начал добавление нового клиента", chatId)
 		ch.dialogHdlr.StartAddClientDialog(chatId)
 	case strings.HasPrefix(data, "check_client_"):
 		ch.handleCheckClient(chatId, data)
@@ -57,13 +57,13 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	case strings.HasPrefix(data, "client_"):
 		ch.handleClientDetails(chatId, data)
 	case data == "cancel_add_client":
-		logger.Info("Пользователь %d отменил добавление клиента", chatId)
+		logger.Debugf("Пользователь %d отменил добавление клиента", chatId)
 		ch.stateMgr.DeleteUserState(chatId)
 		ch.stateMgr.SetDialogMessage(chatId, 0) // Очищаем message_id диалога
 		msg := tgbotapi.NewMessage(chatId, "Добавление клиента отменено")
 		ch.msgSender.Send(msg)
 	case data == "cancel_edit_client":
-		logger.Info("Пользователь %d отменил редактирование клиента", chatId)
+		logger.Debugf("Пользователь %d отменил редактирование клиента", chatId)
 		ch.stateMgr.DeleteUserState(chatId)
 		ch.stateMgr.SetDialogMessage(chatId, 0) // Очищаем message_id диалога
 		msg := tgbotapi.NewMessage(chatId, "Редактирование клиента отменено")
@@ -98,7 +98,7 @@ func (ch *CallbackHandler) handleClientDetails(chatId int64, data string) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d запросил детали клиента %d", chatId, clientID)
+	logger.Debugf("Пользователь %d запросил детали клиента %d", chatId, clientID)
 	ch.clientHdlr.ShowClientDetails(chatId, clientID)
 }
 
@@ -111,7 +111,7 @@ func (ch *CallbackHandler) handleDeleteClient(chatId int64, data string) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d запросил удаление клиента %d", chatId, clientID)
+	logger.Debugf("Пользователь %d запросил удаление клиента %d", chatId, clientID)
 	ch.clientHdlr.ShowDeleteConfirmation(chatId, clientID)
 }
 
@@ -124,7 +124,7 @@ func (ch *CallbackHandler) handleConfirmDelete(chatId int64, data string) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d подтвердил удаление клиента %d", chatId, clientID)
+	logger.Debugf("Пользователь %d подтвердил удаление клиента %d", chatId, clientID)
 	ch.clientHdlr.DeleteClient(chatId, clientID)
 }
 
@@ -137,7 +137,7 @@ func (ch *CallbackHandler) handleEditClient(chatId int64, data string) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d начал редактирование клиента %d", chatId, clientID)
+	logger.Debugf("Пользователь %d начал редактирование клиента %d", chatId, clientID)
 	ch.dialogHdlr.StartEditClientDialog(chatId, clientID)
 }
 
@@ -150,7 +150,7 @@ func (ch *CallbackHandler) handleCheckClient(chatId int64, data string) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d запросил проверку активных торрентов для клиента %d", chatId, clientID)
+	logger.Debugf("Пользователь %d запросил проверку активных торрентов для клиента %d", chatId, clientID)
 	ch.clientHdlr.CheckClientTorrents(chatId, clientID)
 }
 
@@ -163,6 +163,6 @@ func (ch *CallbackHandler) handleRecheckClient(chatId int64, data string) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d запросил повторную проверку активных торрентов для клиента %d", chatId, clientID)
+	logger.Debugf("Пользователь %d запросил повторную проверку активных торрентов для клиента %d", chatId, clientID)
 	ch.clientHdlr.CheckClientTorrents(chatId, clientID)
 }

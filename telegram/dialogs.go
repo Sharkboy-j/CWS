@@ -99,7 +99,7 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 }
 
 func (dh *DialogHandler) handleAddClientName(chatId int64, text, separator string) {
-	logger.Info("Пользователь %d ввел имя клиента: %s", chatId, text)
+	logger.Debugf("Пользователь %d ввел имя клиента: %s", chatId, text)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("add_client_host%s%s", separator, text))
 	messageText := "🌐 Введите host (например: 192.168.1.100):"
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -112,7 +112,7 @@ func (dh *DialogHandler) handleAddClientName(chatId int64, text, separator strin
 }
 
 func (dh *DialogHandler) handleAddClientHost(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел host: %s, состояние: %s", chatId, text, state)
+	logger.Debugf("Пользователь %d ввел host: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 3)
 	if len(parts) < 2 {
 		logger.Warn("Неверный формат состояния add_client_host для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -143,7 +143,7 @@ func (dh *DialogHandler) handleAddClientHost(chatId int64, text, state, separato
 }
 
 func (dh *DialogHandler) handleAddClientPort(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел port: %s, состояние: %s", chatId, text, state)
+	logger.Debugf("Пользователь %d ввел port: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 4)
 	if len(parts) < 3 {
 		logger.Warn("Неверный формат состояния add_client_port для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -173,7 +173,7 @@ func (dh *DialogHandler) handleAddClientPort(chatId int64, text, state, separato
 }
 
 func (dh *DialogHandler) handleAddClientUsername(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел username: %s, состояние: %s", chatId, text, state)
+	logger.Debugf("Пользователь %d ввел username: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 5)
 	if len(parts) < 4 {
 		logger.Warn("Неверный формат состояния add_client_username для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -198,7 +198,7 @@ func (dh *DialogHandler) handleAddClientUsername(chatId int64, text, state, sepa
 }
 
 func (dh *DialogHandler) handleAddClientPassword(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел password, состояние: %s", chatId, state)
+	logger.Debugf("Пользователь %d ввел password, состояние: %s", chatId, state)
 	parts := strings.SplitN(state, separator, 6)
 	if len(parts) < 5 {
 		logger.Warn("Неверный формат состояния add_client_password для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -284,7 +284,7 @@ func (dh *DialogHandler) FinishAddClient(chatId int64, ssl bool) {
 		return
 	}
 
-	logger.Info("Пользователь %d успешно создал клиента: ID=%d, Name=%s, Host=%s:%d",
+	logger.Debugf("Пользователь %d успешно создал клиента: ID=%d, Name=%s, Host=%s:%d",
 		chatId, createdClient.ID, createdClient.Name, createdClient.Host, createdClient.Port)
 
 	dialogMessageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -344,7 +344,7 @@ func (dh *DialogHandler) handleEditClientName(chatId int64, text, state, separat
 		return
 	}
 	clientIDStr := parts[1]
-	logger.Info("Пользователь %d ввел новое имя клиента: %s", chatId, text)
+	logger.Debugf("Пользователь %d ввел новое имя клиента: %s", chatId, text)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("edit_client_host%s%s%s%s", separator, clientIDStr, separator, text))
 	messageText := "🌐 Введите host (например: 192.168.1.100):"
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -368,7 +368,7 @@ func (dh *DialogHandler) handleEditClientHost(chatId int64, text, state, separat
 	}
 	clientIDStr := parts[1]
 	clientName := parts[2]
-	logger.Info("Пользователь %d ввел host: %s", chatId, text)
+	logger.Debugf("Пользователь %d ввел host: %s", chatId, text)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("edit_client_port%s%s%s%s%s%s", separator, clientIDStr, separator, clientName, separator, text))
 	messageText := "🔌 Введите port (например: 8080):"
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -382,7 +382,7 @@ func (dh *DialogHandler) handleEditClientHost(chatId int64, text, state, separat
 
 // handleEditClientPort обрабатывает ввод нового порта клиента
 func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел port: %s, состояние: %s", chatId, text, state)
+	logger.Debugf("Пользователь %d ввел port: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 4)
 	if len(parts) < 4 {
 		logger.Warn("Неверный формат состояния edit_client_port для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -402,7 +402,7 @@ func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separat
 		dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 		return
 	}
-	logger.Info("Пользователь %d ввел port: %d", chatId, port)
+	logger.Debugf("Пользователь %d ввел port: %d", chatId, port)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("edit_client_username%s%s%s%s%s%s%s%d", separator, clientIDStr, separator, clientName, separator, host, separator, port))
 	messageText := "👤 Введите username:"
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -416,7 +416,7 @@ func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separat
 
 // handleEditClientUsername обрабатывает ввод нового username клиента
 func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел username: %s, состояние: %s", chatId, text, state)
+	logger.Debugf("Пользователь %d ввел username: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 5)
 	if len(parts) < 5 {
 		logger.Warn("Неверный формат состояния edit_client_username для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -430,7 +430,7 @@ func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, sep
 	host := parts[3]
 	portStr := parts[4]
 	port, _ := strconv.ParseInt(portStr, 10, 32)
-	logger.Info("Пользователь %d ввел username: %s", chatId, text)
+	logger.Debugf("Пользователь %d ввел username: %s", chatId, text)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("edit_client_password%s%s%s%s%s%s%s%d%s%s", separator, clientIDStr, separator, clientName, separator, host, separator, port, separator, text))
 	messageText := "🔑 Введите password:"
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -444,7 +444,7 @@ func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, sep
 
 // handleEditClientPassword обрабатывает ввод нового password клиента
 func (dh *DialogHandler) handleEditClientPassword(chatId int64, text, state, separator string) {
-	logger.Info("Пользователь %d ввел password, состояние: %s", chatId, state)
+	logger.Debugf("Пользователь %d ввел password, состояние: %s", chatId, state)
 	parts := strings.SplitN(state, separator, 6)
 	if len(parts) < 6 {
 		logger.Warn("Неверный формат состояния edit_client_password для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
@@ -459,7 +459,7 @@ func (dh *DialogHandler) handleEditClientPassword(chatId int64, text, state, sep
 	portStr := parts[4]
 	port, _ := strconv.ParseInt(portStr, 10, 32)
 	username := parts[5]
-	logger.Info("Пользователь %d ввел password", chatId)
+	logger.Debugf("Пользователь %d ввел password", chatId)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("edit_client_ssl%s%s%s%s%s%s%s%d%s%s%s%s", separator, clientIDStr, separator, clientName, separator, host, separator, port, separator, username, separator, text))
 	messageText := "🔒 Использовать SSL?"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -542,7 +542,7 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 		return
 	}
 
-	logger.Info("Пользователь %d успешно обновил клиента: ID=%d, Name=%s, Host=%s:%d",
+	logger.Debugf("Пользователь %d успешно обновил клиента: ID=%d, Name=%s, Host=%s:%d",
 		chatId, clientID, clientName, host, port)
 
 	dialogMessageID := dh.stateMgr.GetDialogMessage(chatId)

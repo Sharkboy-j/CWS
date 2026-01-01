@@ -45,12 +45,12 @@ func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
 }
 
 func (ch *CommandHandler) handleCheckCommand(chatId int64) {
-	logger.Info("Пользователь %d выполнил команду Check", chatId)
+	logger.Debugf("Пользователь %d выполнил команду Check", chatId)
 	ch.ShowMainMenu(chatId)
 }
 
 func (ch *CommandHandler) ShowMainMenu(chatId int64) {
-	logger.Info("Показ главного меню для пользователя %d", chatId)
+	logger.Debugf("Показ главного меню для пользователя %d", chatId)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
 	text := "🏠 *Главное меню*\n\nВыберите действие:"
@@ -73,7 +73,7 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 }
 
 func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
-	logger.Info("Пользователь %d запросил список клиентов для проверки", chatId)
+	logger.Debugf("Пользователь %d запросил список клиентов для проверки", chatId)
 	ctx := context.Background()
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
@@ -82,7 +82,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d имеет %d клиентов для проверки", chatId, len(clients))
+	logger.Debugf("Пользователь %d имеет %d клиентов для проверки", chatId, len(clients))
 
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
@@ -139,7 +139,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 }
 
 func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
-	logger.Info("Пользователь %d запросил список клиентов", chatId)
+	logger.Debugf("Пользователь %d запросил список клиентов", chatId)
 	ctx := context.Background()
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
@@ -148,7 +148,7 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 		ch.msgSender.Send(msg)
 		return
 	}
-	logger.Info("Пользователь %d имеет %d клиентов", chatId, len(clients))
+	logger.Debugf("Пользователь %d имеет %d клиентов", chatId, len(clients))
 
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 

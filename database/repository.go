@@ -111,7 +111,7 @@ func (r *Repository) GetClientByID(ctx context.Context, id int64, userID int64) 
 
 // CreateClient создает нового клиента
 func (r *Repository) CreateClient(ctx context.Context, client *Client) (*Client, error) {
-	logger.Info("Создание клиента для пользователя %d: Name=%s, Host=%s:%d", client.UserID, client.Name, client.Host, client.Port)
+	logger.Debugf("Создание клиента для пользователя %d: Name=%s, Host=%s:%d", client.UserID, client.Name, client.Host, client.Port)
 	query := `INSERT INTO clients (user_id, name, host, port, username, password, ssl, created_at, updated_at)
 	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	          RETURNING id, created_at, updated_at`
@@ -126,13 +126,13 @@ func (r *Repository) CreateClient(ctx context.Context, client *Client) (*Client,
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
-	logger.Info("Клиент успешно создан: ID=%d, UserID=%d, Name=%s", client.ID, client.UserID, client.Name)
+	logger.Debugf("Клиент успешно создан: ID=%d, UserID=%d, Name=%s", client.ID, client.UserID, client.Name)
 	return client, nil
 }
 
 // UpdateClient обновляет данные клиента, только если он принадлежит пользователю
 func (r *Repository) UpdateClient(ctx context.Context, client *Client, userID int64) error {
-	logger.Info("Обновление клиента ID=%d для пользователя %d: Name=%s, Host=%s:%d", client.ID, userID, client.Name, client.Host, client.Port)
+	logger.Debugf("Обновление клиента ID=%d для пользователя %d: Name=%s, Host=%s:%d", client.ID, userID, client.Name, client.Host, client.Port)
 	query := `UPDATE clients 
 	          SET name = $1, host = $2, port = $3, username = $4, password = $5, ssl = $6, updated_at = $7
 	          WHERE id = $8 AND user_id = $9`
@@ -155,13 +155,13 @@ func (r *Repository) UpdateClient(ctx context.Context, client *Client, userID in
 		return fmt.Errorf("client not found or access denied")
 	}
 
-	logger.Info("Клиент ID=%d успешно обновлен для пользователя %d", client.ID, userID)
+	logger.Debugf("Клиент ID=%d успешно обновлен для пользователя %d", client.ID, userID)
 	return nil
 }
 
 // DeleteClient удаляет клиента, только если он принадлежит пользователю
 func (r *Repository) DeleteClient(ctx context.Context, id int64, userID int64) error {
-	logger.Info("Удаление клиента ID=%d для пользователя %d", id, userID)
+	logger.Debugf("Удаление клиента ID=%d для пользователя %d", id, userID)
 	query := `DELETE FROM clients WHERE id = $1 AND user_id = $2`
 	result, err := r.db.ExecContext(ctx, query, id, userID)
 	if err != nil {
@@ -180,7 +180,7 @@ func (r *Repository) DeleteClient(ctx context.Context, id int64, userID int64) e
 		return fmt.Errorf("client not found or access denied")
 	}
 
-	logger.Info("Клиент ID=%d успешно удален для пользователя %d", id, userID)
+	logger.Debugf("Клиент ID=%d успешно удален для пользователя %d", id, userID)
 	return nil
 }
 
@@ -261,13 +261,13 @@ func (r *Repository) GetAllUserStates(ctx context.Context) (map[int64]string, er
 		return nil, fmt.Errorf("error iterating user states: %w", err)
 	}
 
-	logger.Info("Загружено %d состояний пользователей", len(states))
+	logger.Debugf("Загружено %d состояний пользователей", len(states))
 	return states, nil
 }
 
 // SetMenuMessageID сохраняет ID последнего сообщения меню для пользователя
 func (r *Repository) SetMenuMessageID(ctx context.Context, userID int64, messageID int) error {
-	logger.Debug("Сохранение menu_message_id для пользователя %d: %d", userID, messageID)
+	logger.Debugf("Сохранение menu_message_id для пользователя %d: %d", userID, messageID)
 	query := `UPDATE user_states 
 	          SET menu_message_id = $1, updated_at = NOW()
 	          WHERE user_id = $2`
@@ -353,7 +353,7 @@ func (r *Repository) GetAllMenuMessageIDs(ctx context.Context) (map[int64]int, e
 		return nil, fmt.Errorf("error iterating menu message ids: %w", err)
 	}
 
-	logger.Info("Загружено %d menu_message_id пользователей", len(messageIDs))
+	logger.Debugf("Загружено %d menu_message_id пользователей", len(messageIDs))
 	return messageIDs, nil
 }
 

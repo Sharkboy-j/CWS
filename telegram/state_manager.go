@@ -28,7 +28,7 @@ func NewStateManager(repo *database.Repository) (*StateManager, error) {
 		logger.Warn("Не удалось загрузить состояния пользователей: %v", err)
 	} else {
 		sm.userState = states
-		logger.Info("Загружено %d состояний пользователей из БД", len(states))
+		logger.Debugf("Загружено %d состояний пользователей из БД", len(states))
 	}
 
 	menuMessageIDs, err := repo.GetAllMenuMessageIDs(ctx)
@@ -36,7 +36,7 @@ func NewStateManager(repo *database.Repository) (*StateManager, error) {
 		logger.Warn("Не удалось загрузить menu_message_id пользователей: %v", err)
 	} else {
 		sm.menuMessage = menuMessageIDs
-		logger.Info("Загружено %d menu_message_id пользователей из БД", len(menuMessageIDs))
+		logger.Debugf("Загружено %d menu_message_id пользователей из БД", len(menuMessageIDs))
 	}
 
 	return sm, nil

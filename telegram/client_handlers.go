@@ -146,7 +146,7 @@ func (ch *ClientHandler) DeleteClient(chatId int64, clientID int64) {
 		return
 	}
 
-	logger.Info("Пользователь %d успешно удалил клиента: ID=%d, Name=%s", chatId, clientID, clientName)
+	logger.Debugf("Пользователь %d успешно удалил клиента: ID=%d, Name=%s", chatId, clientID, clientName)
 
 	if ch.cmdHdlr != nil {
 		ch.cmdHdlr.HandleClientsCommand(chatId)

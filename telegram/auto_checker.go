@@ -21,7 +21,7 @@ func NewAutoChecker(clientHdlr *ClientHandler, intervalSeconds int) *AutoChecker
 }
 
 func (ac *AutoChecker) Start(ctx context.Context) {
-	logger.Info("Автоматическая проверка запущена с интервалом %v", ac.interval)
+	logger.Infof("Автоматическая проверка запущена с интервалом %v", ac.interval)
 
 	go ac.runCheck(ctx)
 
@@ -40,7 +40,7 @@ func (ac *AutoChecker) Start(ctx context.Context) {
 }
 
 func (ac *AutoChecker) runCheck(ctx context.Context) {
-	logger.Info("Начало автоматической проверки всех пользователей")
+	logger.Debugf("Начало автоматической проверки всех пользователей")
 	startTime := time.Now()
 
 	userIDs, err := ac.clientHdlr.repo.GetAllUserIDs(ctx)
@@ -54,7 +54,7 @@ func (ac *AutoChecker) runCheck(ctx context.Context) {
 		return
 	}
 
-	logger.Info("Найдено %d пользователей для автоматической проверки", len(userIDs))
+	logger.Debugf("Найдено %d пользователей для автоматической проверки", len(userIDs))
 
 	for _, userID := range userIDs {
 		select {
@@ -70,7 +70,7 @@ func (ac *AutoChecker) runCheck(ctx context.Context) {
 	}
 
 	elapsed := time.Since(startTime)
-	logger.Info("Автоматическая проверка завершена за %v для %d пользователей", elapsed, len(userIDs))
+	logger.Debugf("Автоматическая проверка завершена за %v для %d пользователей", elapsed, len(userIDs))
 }
 
 func (ac *AutoChecker) GetLastCheckTime(userID int64) (time.Time, bool) {

@@ -26,13 +26,18 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
+# Create non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
+
 # Copy binary from builder
 COPY --from=builder /build/cws .
 
-# Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser && \
-    chown -R appuser:appuser /app
+# Copy migrations directory
+COPY --from=builder /build/database/migrations ./database/migrations
+
+# Set ownership of all files
+RUN chown -R appuser:appuser /app
 
 USER appuser
 

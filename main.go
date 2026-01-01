@@ -22,7 +22,7 @@ func main() {
 	}
 
 	logger.SetLevelFromString(cfg.LogLevel)
-	logger.Info("Логирование инициализировано с уровнем: %s", cfg.LogLevel)
+	logger.Debugf("Логирование инициализировано с уровнем: %s", cfg.LogLevel)
 
 	repo, err := database.NewRepository(cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	if err != nil {

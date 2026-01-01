@@ -106,7 +106,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
-	logger.Info("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+	logger.Debugf("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
 }
 
 func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
@@ -151,7 +151,7 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
-	logger.Info("Автоматическая проверка завершена для пользователя %d: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+	logger.Debugf("Автоматическая проверка завершена для пользователя %d: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
 }
 
 func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *database.Client) ClientCheckResult {

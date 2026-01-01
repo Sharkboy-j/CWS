@@ -72,7 +72,7 @@ func NewBotService(token string, chatId int64, repo *database.Repository, cfg *c
 		logger.Warn("Не удалось установить Menu Button: %v", err)
 	}
 
-	logger.Info("Бот инициализирован для пользователя %d", chatId)
+	logger.Debugf("Бот инициализирован для пользователя %d", chatId)
 
 	return service, nil
 }
@@ -164,7 +164,7 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 	if update.CallbackQuery != nil {
 		chatId := update.CallbackQuery.Message.Chat.ID
 		username := update.CallbackQuery.From.UserName
-		logger.Info("Пользователь %d (@%s) нажал на кнопку: %s", chatId, username, update.CallbackQuery.Data)
+		logger.Debugf("Пользователь %d (@%s) нажал на кнопку: %s", chatId, username, update.CallbackQuery.Data)
 		bs.callbackHdlr.HandleCallbackQuery(update.CallbackQuery)
 		return
 	}
@@ -174,7 +174,7 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 		username := update.Message.From.UserName
 		command := update.Message.Command()
 		messageID := update.Message.MessageID
-		logger.Info("Пользователь %d (@%s) выполнил команду: /%s", chatId, username, command)
+		logger.Debugf("Пользователь %d (@%s) выполнил команду: /%s", chatId, username, command)
 
 		bs.cmdHdlr.HandleCommand(update.Message)
 
@@ -185,7 +185,7 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 	if update.Message != nil {
 		chatId := update.Message.Chat.ID
 		username := update.Message.From.UserName
-		logger.Debug("Пользователь %d (@%s) отправил сообщение: %s", chatId, username, update.Message.Text)
+		logger.Debugf("Пользователь %d (@%s) отправил сообщение: %s", chatId, username, update.Message.Text)
 		bs.dialogHdlr.HandleMessage(update.Message)
 	}
 }

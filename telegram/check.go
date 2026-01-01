@@ -226,7 +226,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
-	logger.Info("Пользователь %d получил результат проверки клиента %s: %d активных торрентов, время выполнения: %v", chatId, client.Name, count, elapsed)
+	logger.Debugf("Пользователь %d получил результат проверки клиента %s: %d активных торрентов, время выполнения: %v", chatId, client.Name, count, elapsed)
 }
 
 func extractURLFromComment(comment string) string {
