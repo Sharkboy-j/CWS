@@ -3,10 +3,9 @@ package main
 import (
 	"context"
 	"cws/config"
+	"cws/internal/bot"
+	"cws/internal/storage"
 	"cws/logger"
-	"cws/store"
-	"cws/telegram"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,23 +17,26 @@ func main() {
 
 	cfg, err := config.ReadConfig(ctx)
 	if err != nil {
-		log.Fatalf("err during reading config enviroment: %s", err)
+		logger.Errorf("err during reading config enviroment: %s", err)
+		os.Exit(1)
 	}
 
 	logger.SetLevelFromString(cfg.LogLevel)
 	logger.Debugf("Логирование инициализировано с уровнем: %s", cfg.LogLevel)
 
-	repo, err := store.NewRepository(cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
+	repo, err := storage.NewRepository(cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	if err != nil {
-		log.Fatalf("err during database initialization: %s", err)
+		logger.Errorf("err during database initialization: %s", err)
+		os.Exit(1)
 	}
 	defer func() {
 		_ = repo.Close()
 	}()
 
-	botService, err := telegram.NewBotService(cfg.TelegramToken, cfg.ChatId, repo, cfg)
+	botService, err := bot.NewBotService(cfg.TelegramToken, repo, cfg)
 	if err != nil {
-		log.Fatalf("err during bot initialization: %s", err)
+		logger.Errorf("err during bot initialization: %s", err)
+		os.Exit(1)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -42,14 +44,14 @@ func main() {
 
 	go func() {
 		if err := botService.Start(ctx); err != nil {
-			log.Printf("Ошибка при работе бота: %v", err)
+			logger.Errorf("Ошибка при работе бота: %v", err)
 		}
 	}()
 
 	botService.StartAutoChecker(ctx)
 
 	<-sigChan
-	log.Println("Получен сигнал завершения, останавливаем сервис...")
+	logger.Info("Получен сигнал завершения, останавливаем сервис...")
 	cancelFunction()
 
 	os.Exit(0)

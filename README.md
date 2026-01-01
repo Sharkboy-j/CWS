@@ -48,7 +48,6 @@ cd CWS
 2. Создайте файл `.env` в корне проекта (или экспортируйте переменные окружения):
 ```bash
 TELEGRAM_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_telegram_chat_id
 RUTRACKER_API_TOKEN=your_rutracker_api_token
 DB_HOST=your_postgres_host
 DB_PORT=5432
@@ -86,7 +85,6 @@ go mod download
 ```json
 {
   "telegram_token": "your_telegram_bot_token",
-  "telegram_chat_id": 123456789,
   "rutracker_api_token": "your_rutracker_api_token",
   "rutracker_host": "https://api.rutracker.cc",
   "db_host": "localhost",
@@ -116,7 +114,6 @@ go run main.go
 | Переменная | Описание | Обязательная | По умолчанию |
 |------------|----------|--------------|--------------|
 | `TELEGRAM_TOKEN` | Токен Telegram бота | Да | - |
-| `TELEGRAM_CHAT_ID` | ID чата Telegram | Да | - |
 | `RUTRACKER_API_TOKEN` | API токен RuTracker | Да | - |
 | `RUTRACKER_HOST` | Хост API RuTracker | Нет | `https://api.rutracker.cc` |
 | `DB_HOST` | Хост PostgreSQL | Нет | `localhost` |
@@ -133,7 +130,6 @@ go run main.go
 ```json
 {
   "telegram_token": "your_telegram_bot_token",
-  "telegram_chat_id": 123456789,
   "rutracker_api_token": "your_rutracker_api_token",
   "rutracker_host": "https://api.rutracker.cc",
   "db_host": "localhost",
@@ -156,16 +152,11 @@ go run main.go
    - Следуйте инструкциям для создания бота
    - Сохраните полученный токен
 
-2. Получите ваш Chat ID:
-   - Напишите боту [@userinfobot](https://t.me/userinfobot)
-   - Он отправит ваш ID (это и есть Chat ID)
-   - Альтернативно: напишите любому сообщение вашему боту, затем используйте `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` для получения chat_id
-
-3. Активируйте бота:
+2. Активируйте бота:
    - Отправьте команду `/start` вашему боту
    - Это необходимо для того, чтобы бот мог отправлять вам сообщения
 
-4. Добавьте токен и Chat ID в конфигурацию (см. раздел "Конфигурация")
+3. Добавьте токен в конфигурацию (см. раздел "Конфигурация")
 
 ## 📱 Команды Telegram бота
 

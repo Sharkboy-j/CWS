@@ -2,7 +2,7 @@ package config
 
 import (
 	"context"
-	"fmt"
+	"cws/logger"
 
 	"github.com/heetch/confita"
 	"github.com/heetch/confita/backend/env"
@@ -29,7 +29,7 @@ func ReadConfig(ctx context.Context) (*Config, error) {
 		return nil, err
 	}
 
-	fmt.Println(cfg)
+	logger.Debugf("Loaded config: %+v", cfg)
 
 	return &cfg, nil
 }

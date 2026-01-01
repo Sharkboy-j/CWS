@@ -86,3 +86,39 @@ jobs:
           ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+  create-release:
+    runs-on: self-hosted
+    needs: docker-build-push
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+
+    - name: Extract version from tag
+      id: tag
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.tag.outputs.version }}
+        name: Release ${{ steps.tag.outputs.version }}
+        body: |
+          ## Release ${{ steps.tag.outputs.version }}
+          
+          Docker image: `${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}`
+          
+          ### Pull the image
+          ```bash
+          docker pull ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}
+          ```
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
