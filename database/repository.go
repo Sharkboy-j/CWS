@@ -387,3 +387,61 @@ func (r *Repository) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 	logger.Debug("Найдено %d уникальных пользователей", len(userIDs))
 	return userIDs, nil
 }
+
+// SetUserTimezone сохраняет часовой пояс пользователя
+func (r *Repository) SetUserTimezone(ctx context.Context, userID int64, timezone string) error {
+	logger.Debug("Сохранение часового пояса для пользователя %d: %s", userID, timezone)
+	query := `UPDATE user_states 
+	          SET timezone = $1, updated_at = NOW()
+	          WHERE user_id = $2`
+
+	result, err := r.db.ExecContext(ctx, query, timezone, userID)
+	if err != nil {
+		logger.Error("Ошибка при сохранении часового пояса для пользователя %d: %v", userID, err)
+		return fmt.Errorf("failed to set user timezone: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		logger.Error("Ошибка при получении количества обновленных строк: %v", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		query = `INSERT INTO user_states (user_id, state, timezone, updated_at)
+		         VALUES ($1, '', $2, NOW())
+		         ON CONFLICT (user_id)
+		         DO UPDATE SET timezone = $2, updated_at = NOW()`
+		_, err = r.db.ExecContext(ctx, query, userID, timezone)
+		if err != nil {
+			logger.Error("Ошибка при создании/обновлении записи с timezone для пользователя %d: %v", userID, err)
+			return fmt.Errorf("failed to insert/update timezone: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// GetUserTimezone получает часовой пояс пользователя
+func (r *Repository) GetUserTimezone(ctx context.Context, userID int64) (string, error) {
+	logger.Debug("Получение часового пояса для пользователя %d", userID)
+	query := `SELECT timezone FROM user_states WHERE user_id = $1`
+
+	var timezone sql.NullString
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&timezone)
+	if err == sql.ErrNoRows {
+		logger.Debug("Часовой пояс не найден для пользователя %d, используем Europe/Minsk", userID)
+		return "Europe/Minsk", nil
+	}
+	if err != nil {
+		logger.Error("Ошибка при получении часового пояса для пользователя %d: %v", userID, err)
+		return "Europe/Minsk", fmt.Errorf("failed to get user timezone: %w", err)
+	}
+
+	if !timezone.Valid || timezone.String == "" {
+		return "Europe/Minsk", nil
+	}
+
+	logger.Debug("Часовой пояс найден для пользователя %d: %s", userID, timezone.String)
+	return timezone.String, nil
+}

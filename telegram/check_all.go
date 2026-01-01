@@ -97,13 +97,13 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	// Сохраняем результаты в кэш для пагинации
 	allMissingTorrents := ch.collectAllMissingTorrents(results)
 	ch.checkResultsCache[chatId] = &CheckResultsCache{
-		Results:           results,
-		TotalDuration:     elapsed,
-		LastCheckTime:     &now,
+		Results:            results,
+		TotalDuration:      elapsed,
+		LastCheckTime:      &now,
 		AllMissingTorrents: allMissingTorrents,
 	}
 
-	resultText, resultKeyboard := ch.formatAllClientsResult(results, elapsed, &now, 0)
+	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &now, 0)
 
 	// Добавляем стандартные кнопки в конец клавиатуры
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
@@ -128,6 +128,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 // ShowMissingTorrentsPage показывает страницу мёртвых торрентов из кэша
 func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
+	ctx := context.Background()
 	cache, exists := ch.checkResultsCache[chatId]
 	if !exists || cache == nil {
 		logger.Warn("Пользователь %d запросил страницу %d, но кэш результатов отсутствует", chatId, page)
@@ -137,7 +138,7 @@ func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
 	}
 
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
-	resultText, resultKeyboard := ch.formatAllClientsResult(cache.Results, cache.TotalDuration, cache.LastCheckTime, page)
+	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, cache.Results, cache.TotalDuration, cache.LastCheckTime, page)
 
 	// Добавляем стандартные кнопки в конец клавиатуры
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
@@ -178,8 +179,29 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	// Очищаем старый кэш результатов при новой проверке
 	delete(ch.checkResultsCache, chatId)
 
+	// Показываем начало проверки
+	statusText := fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Начинаю проверку %d клиентов...", len(clients))
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		),
+	)
+	var newMessageID int
+	newMessageID, _ = ch.msgSender.SendOrEdit(chatId, messageID, statusText, &keyboard)
+	if newMessageID > 0 {
+		messageID = newMessageID
+		ch.stateMgr.SetMenuMessage(chatId, messageID)
+	}
+
 	var results []ClientCheckResult
-	for _, client := range clients {
+	for i, client := range clients {
+		// Обновляем статус проверки
+		statusText = fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Проверяю клиентов...\n\n✅ Проверено: %d/%d\n🔍 Проверяю: *%s*", i, len(clients), client.Name)
+		newMessageID, _ = ch.msgSender.SendOrEdit(chatId, messageID, statusText, &keyboard)
+		if newMessageID > 0 {
+			messageID = newMessageID
+		}
+
 		result := ch.checkSingleClientSilent(ctx, client)
 		results = append(results, result)
 	}
@@ -190,13 +212,13 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	// Сохраняем результаты в кэш для пагинации
 	allMissingTorrents := ch.collectAllMissingTorrents(results)
 	ch.checkResultsCache[chatId] = &CheckResultsCache{
-		Results:           results,
-		TotalDuration:     elapsed,
-		LastCheckTime:     &now,
+		Results:            results,
+		TotalDuration:      elapsed,
+		LastCheckTime:      &now,
 		AllMissingTorrents: allMissingTorrents,
 	}
 
-	resultText, resultKeyboard := ch.formatAllClientsResult(results, elapsed, &now, 0)
+	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &now, 0)
 
 	// Добавляем стандартные кнопки в конец клавиатуры
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
@@ -207,9 +229,9 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
 		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
 	))
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
+	finalKeyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
-	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
+	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &finalKeyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении/отправке сообщения для пользователя %d: %v", chatId, err)
 		return
@@ -457,12 +479,13 @@ func (ch *ClientHandler) collectAllMissingTorrents(results []ClientCheckResult) 
 	return allTorrents
 }
 
-func (ch *ClientHandler) formatAllClientsResult(results []ClientCheckResult, totalDuration time.Duration, lastCheckTime *time.Time, page int) (string, *tgbotapi.InlineKeyboardMarkup) {
+func (ch *ClientHandler) formatAllClientsResult(ctx context.Context, chatId int64, results []ClientCheckResult, totalDuration time.Duration, lastCheckTime *time.Time, page int) (string, *tgbotapi.InlineKeyboardMarkup) {
 	var text strings.Builder
 	text.WriteString("📊 *Результаты проверки всех клиентов*\n\n")
 	text.WriteString(fmt.Sprintf("⏱ Общее время: *%s*\n", formatDuration(totalDuration)))
 	if lastCheckTime != nil {
-		text.WriteString(fmt.Sprintf("🕐 Последняя проверка: *%s*\n", lastCheckTime.Format("02.01.2006 15:04:05")))
+		formattedTime := ch.formatTimeInUserTimezone(ctx, chatId, *lastCheckTime)
+		text.WriteString(fmt.Sprintf("🕐 Последняя проверка: *%s*\n", formattedTime))
 	}
 	text.WriteString("\n---\n\n")
 

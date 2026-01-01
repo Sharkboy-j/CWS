@@ -70,27 +70,32 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 
 	defer dh.msgSender.DeleteMessage(chatId, messageID)
 
-	if state == "add_client_name" {
+	switch {
+	case state == "add_client_name":
 		dh.handleAddClientName(chatId, text, separator)
-	} else if strings.HasPrefix(state, "add_client_host") {
+	case strings.HasPrefix(state, "add_client_host"):
 		dh.handleAddClientHost(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "add_client_port") {
+	case strings.HasPrefix(state, "add_client_port"):
 		dh.handleAddClientPort(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "add_client_username") {
+	case strings.HasPrefix(state, "add_client_username"):
 		dh.handleAddClientUsername(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "add_client_password") {
+	case strings.HasPrefix(state, "add_client_password"):
 		dh.handleAddClientPassword(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "edit_client_name") {
+	case strings.HasPrefix(state, "edit_client_name"):
 		dh.handleEditClientName(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "edit_client_host") {
+	case strings.HasPrefix(state, "edit_client_host"):
 		dh.handleEditClientHost(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "edit_client_port") {
+	case strings.HasPrefix(state, "edit_client_port"):
 		dh.handleEditClientPort(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "edit_client_username") {
+	case strings.HasPrefix(state, "edit_client_username"):
 		dh.handleEditClientUsername(chatId, text, state, separator)
-	} else if strings.HasPrefix(state, "edit_client_password") {
+	case strings.HasPrefix(state, "edit_client_password"):
 		dh.handleEditClientPassword(chatId, text, state, separator)
-	} else {
+	case strings.HasPrefix(state, "add_torrent_custom_path_"):
+		dh.handleAddTorrentCustomPath(chatId, text, state)
+	case strings.HasPrefix(state, "monitor_torrent_hash_"):
+		dh.handleMonitorTorrentHash(chatId, text, state)
+	default:
 		logger.Warn("Неизвестное состояние для пользователя %d: %s, текст: %s", chatId, state, text)
 		dh.stateMgr.DeleteUserState(chatId)
 		msg := tgbotapi.NewMessage(chatId, "Ошибка: неизвестное состояние. Начните операцию заново.")
@@ -560,4 +565,91 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	dh.stateMgr.DeleteUserState(chatId)
 
 	dh.clientHdlr.ShowClientDetails(chatId, clientID)
+}
+
+// handleAddTorrentCustomPath обрабатывает ввод пути сохранения вручную
+func (dh *DialogHandler) handleAddTorrentCustomPath(chatId int64, text, state string) {
+	logger.Debugf("Пользователь %d ввел путь сохранения: %s", chatId, text)
+
+	// Извлекаем ID клиента из состояния
+	parts := strings.Split(state, "_")
+	if len(parts) < 5 {
+		logger.Warn("Неверный формат состояния add_torrent_custom_path для пользователя %d: %s", chatId, state)
+		dh.stateMgr.DeleteUserState(chatId)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните заново.")
+		dh.msgSender.Send(msg)
+		return
+	}
+	clientIDStr := parts[4]
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Error("Ошибка при парсинге ID клиента: %v", err)
+		dh.stateMgr.DeleteUserState(chatId)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента.")
+		dh.msgSender.Send(msg)
+		return
+	}
+
+	// Получаем кэш торрент файла
+	cache, exists := dh.clientHdlr.torrentFilesCache[chatId]
+	if !exists || cache == nil || cache.ClientID != clientID {
+		logger.Warn("Кэш торрент файла не найден для пользователя %d", chatId)
+		dh.stateMgr.DeleteUserState(chatId)
+		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка: данные торрента не найдены. Начните заново.")
+		dh.msgSender.Send(msg)
+		return
+	}
+
+	// Сохраняем выбранный путь в кэш
+	cache.SelectedPath = text
+	dh.clientHdlr.torrentFilesCache[chatId] = cache
+
+	// Показываем вопрос о пропуске проверки хеша
+	dh.clientHdlr.ShowSkipHashCheckQuestion(chatId, clientID, text)
+}
+
+// handleMonitorTorrentHash обрабатывает ввод хеша торрента для мониторинга
+func (dh *DialogHandler) handleMonitorTorrentHash(chatId int64, text, state string) {
+	logger.Debugf("Пользователь %d ввел хеш торрента для мониторинга: %s", chatId, text)
+
+	// Извлекаем ID клиента из состояния
+	parts := strings.Split(state, "_")
+	if len(parts) < 4 {
+		logger.Warn("Неверный формат состояния monitor_torrent_hash для пользователя %d: %s", chatId, state)
+		dh.stateMgr.DeleteUserState(chatId)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните заново.")
+		dh.msgSender.Send(msg)
+		return
+	}
+	clientIDStr := parts[3]
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Неверный ID клиента в состоянии monitor_torrent_hash для пользователя %d: %s", chatId, clientIDStr)
+		dh.stateMgr.DeleteUserState(chatId)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента. Начните заново.")
+		dh.msgSender.Send(msg)
+		return
+	}
+
+	// Очищаем пробелы и приводим к верхнему регистру
+	hash := strings.TrimSpace(strings.ToUpper(text))
+
+	// Проверяем, что хеш не пустой и имеет правильную длину (40 символов для SHA-1)
+	if hash == "" {
+		msg := tgbotapi.NewMessage(chatId, "❌ Хеш не может быть пустым. Введите хеш торрента:")
+		dh.msgSender.Send(msg)
+		return
+	}
+
+	if len(hash) != 40 {
+		msg := tgbotapi.NewMessage(chatId, "❌ Хеш должен содержать 40 символов. Введите правильный хеш:")
+		dh.msgSender.Send(msg)
+		return
+	}
+
+	dh.stateMgr.DeleteUserState(chatId)
+
+	// Запускаем мониторинг
+	ctx := context.Background()
+	dh.clientHdlr.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, hash)
 }

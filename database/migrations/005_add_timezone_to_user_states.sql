@@ -1,0 +1,2 @@
+ALTER TABLE user_states 
+ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'Europe/Minsk';

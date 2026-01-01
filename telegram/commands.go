@@ -62,6 +62,12 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📋 Клиенты", "clients"),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📥 Добавить торрент файл", "add_torrent_file"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📊 Мониторинг торрента", "monitor_torrent"),
+		),
 	)
 
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)

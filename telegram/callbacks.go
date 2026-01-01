@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"cws/logger"
 	"strconv"
 	"strings"
@@ -42,11 +43,17 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 
 	switch {
 	case data == "main_menu":
+		// Останавливаем мониторинг торрента, если он активен
+		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
 		if ch.cmdHdlr != nil {
 			ch.cmdHdlr.ShowMainMenu(chatId)
 		}
 	case data == "check_torrents":
 		ch.clientHdlr.CheckAllClients(chatId)
+	case data == "add_torrent_file":
+		ch.clientHdlr.ShowClientsForTorrentAdd(chatId)
+	case data == "monitor_torrent":
+		ch.clientHdlr.ShowClientsForTorrentMonitor(chatId)
 	case data == "add_client":
 		logger.Debugf("Пользователь %d начал добавление нового клиента", chatId)
 		ch.dialogHdlr.StartAddClientDialog(chatId)
@@ -97,7 +104,259 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		}
 		logger.Debugf("Пользователь %d запросил страницу %d мёртвых торрентов", chatId, page)
 		ch.clientHdlr.ShowMissingTorrentsPage(chatId, page)
+	case strings.HasPrefix(data, "add_torrent_client_"):
+		ch.handleAddTorrentClient(chatId, data)
+	case strings.HasPrefix(data, "select_save_path_"):
+		ch.handleSelectSavePath(chatId, data)
+	case data == "cancel_add_torrent":
+		ch.handleCancelAddTorrent(chatId)
+	case strings.HasPrefix(data, "custom_save_path_"):
+		ch.handleCustomSavePath(chatId, data)
+	case strings.HasPrefix(data, "skip_hash_check_"):
+		ch.handleSkipHashCheck(chatId, data)
+	case strings.HasPrefix(data, "delete_existing_torrent_"):
+		ch.handleDeleteExistingTorrent(chatId, data)
+	case strings.HasPrefix(data, "keep_existing_torrent_"):
+		ch.handleKeepExistingTorrent(chatId, data)
+	case strings.HasPrefix(data, "confirm_delete_torrent_"):
+		ch.handleConfirmDeleteTorrent(chatId, data)
+	case strings.HasPrefix(data, "monitor_torrent_client_"):
+		ch.handleMonitorTorrentClient(chatId, data)
+	case strings.HasPrefix(data, "monitor_torrent_hash_btn_"):
+		ch.handleMonitorTorrentHashButton(chatId, data)
+	case strings.HasPrefix(data, "monitor_torrent_manual_"):
+		ch.handleMonitorTorrentManual(chatId, data)
 	}
+}
+
+func (ch *CallbackHandler) handleMonitorTorrentClient(chatId int64, data string) {
+	clientIDStr := strings.TrimPrefix(data, "monitor_torrent_client_")
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента")
+		ch.msgSender.Send(msg)
+		return
+	}
+	logger.Debugf("Пользователь %d выбрал клиента %d для мониторинга торрента", chatId, clientID)
+	ch.clientHdlr.StartTorrentMonitorDialog(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleMonitorTorrentHashButton(chatId int64, data string) {
+	// Формат: monitor_torrent_hash_btn_{clientID}_{index}
+	prefix := "monitor_torrent_hash_btn_"
+	if !strings.HasPrefix(data, prefix) {
+		logger.Warn("Пользователь %d отправил неверный формат выбора хеша: %s", chatId, data)
+		return
+	}
+	
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Пользователь %d отправил неверный формат выбора хеша: %s", chatId, data)
+		return
+	}
+	
+	clientIDStr := parts[0]
+	indexStr := parts[1]
+
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+
+	index, err := strconv.Atoi(indexStr)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный индекс торрента: %s", chatId, indexStr)
+		return
+	}
+
+	// Получаем hash из кэша
+	cache, exists := ch.clientHdlr.torrentMonitorCache[chatId]
+	if !exists || cache == nil || cache.ClientID != clientID {
+		logger.Warn("Кэш торрентов для мониторинга не найден для пользователя %d", chatId)
+		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка: данные не найдены. Начните заново.")
+		ch.msgSender.Send(msg)
+		return
+	}
+
+	if index < 0 || index >= len(cache.Torrents) {
+		logger.Warn("Неверный индекс торрента %d для пользователя %d (всего: %d)", index, chatId, len(cache.Torrents))
+		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка: неверный индекс торрента.")
+		ch.msgSender.Send(msg)
+		return
+	}
+
+	hash := cache.Torrents[index].Hash
+	logger.Debugf("Пользователь %d выбрал торрент для мониторинга, клиент: %d, hash: %s", chatId, clientID, hash)
+	
+	// Очищаем кэш
+	delete(ch.clientHdlr.torrentMonitorCache, chatId)
+	
+	ctx := context.Background()
+	ch.clientHdlr.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, hash)
+}
+
+func (ch *CallbackHandler) handleMonitorTorrentManual(chatId int64, data string) {
+	clientIDStr := strings.TrimPrefix(data, "monitor_torrent_manual_")
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента")
+		ch.msgSender.Send(msg)
+		return
+	}
+	logger.Debugf("Пользователь %d выбрал ручной ввод хеша для клиента %d", chatId, clientID)
+	ch.clientHdlr.StartTorrentMonitorManualInput(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleAddTorrentClient(chatId int64, data string) {
+	clientIDStr := strings.TrimPrefix(data, "add_torrent_client_")
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента")
+		ch.msgSender.Send(msg)
+		return
+	}
+	logger.Debugf("Пользователь %d выбрал клиента %d для добавления торрента", chatId, clientID)
+	ch.clientHdlr.StartAddTorrentDialog(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleSelectSavePath(chatId int64, data string) {
+	parts := strings.Split(data, "_")
+	if len(parts) < 4 {
+		logger.Warn("Пользователь %d отправил неверный формат выбора пути: %s", chatId, data)
+		return
+	}
+	clientIDStr := parts[3]
+	pathIndexStr := parts[4]
+	
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+	
+	pathIndex, err := strconv.Atoi(pathIndexStr)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный индекс пути: %s", chatId, pathIndexStr)
+		return
+	}
+	
+	logger.Debugf("Пользователь %d выбрал путь сохранения %d для клиента %d", chatId, pathIndex, clientID)
+	ch.clientHdlr.HandleSavePathSelection(chatId, clientID, pathIndex)
+}
+
+func (ch *CallbackHandler) handleCancelAddTorrent(chatId int64) {
+	logger.Debugf("Пользователь %d отменил добавление торрента", chatId)
+	ch.clientHdlr.CancelAddTorrent(chatId)
+}
+
+func (ch *CallbackHandler) handleCustomSavePath(chatId int64, data string) {
+	clientIDStr := strings.TrimPrefix(data, "custom_save_path_")
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+	logger.Debugf("Пользователь %d выбрал ввод пути вручную для клиента %d", chatId, clientID)
+	ch.clientHdlr.StartCustomSavePathDialog(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleSkipHashCheck(chatId int64, data string) {
+	// Формат: skip_hash_check_{clientID}_{true/false}
+	parts := strings.Split(data, "_")
+	if len(parts) < 5 {
+		logger.Warn("Пользователь %d отправил неверный формат выбора пропуска проверки хеша: %s", chatId, data)
+		return
+	}
+	clientIDStr := parts[3]
+	skipStr := parts[4]
+
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+
+	skipHashCheck := skipStr == "true"
+	logger.Debugf("Пользователь %d выбрал пропуск проверки хеша: %v для клиента %d", chatId, skipHashCheck, clientID)
+	ch.clientHdlr.HandleSkipHashCheckSelection(chatId, clientID, skipHashCheck)
+}
+
+func (ch *CallbackHandler) handleDeleteExistingTorrent(chatId int64, data string) {
+	// Формат: delete_existing_torrent_{clientID}
+	// Hash берем из кэша
+	clientIDStr := strings.TrimPrefix(data, "delete_existing_torrent_")
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+
+	// Получаем hash из кэша
+	cache, exists := ch.clientHdlr.torrentFilesCache[chatId]
+	if !exists || cache == nil || cache.ExistingHash == "" {
+		logger.Warn("Кэш торрент файла не найден или hash отсутствует для пользователя %d", chatId)
+		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка: данные торрента не найдены. Начните заново.")
+		ch.msgSender.Send(msg)
+		return
+	}
+
+	logger.Debugf("Пользователь %d выбрал удаление существующего торрента для клиента %d, hash: %s", chatId, clientID, cache.ExistingHash)
+	ch.clientHdlr.ShowDeleteFilesQuestion(chatId, clientID, cache.ExistingHash)
+}
+
+func (ch *CallbackHandler) handleKeepExistingTorrent(chatId int64, data string) {
+	clientIDStr := strings.TrimPrefix(data, "keep_existing_torrent_")
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+	logger.Debugf("Пользователь %d решил оставить существующий торрент для клиента %d", chatId, clientID)
+	ch.clientHdlr.HandleKeepExistingTorrent(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleConfirmDeleteTorrent(chatId int64, data string) {
+	// Формат: confirm_delete_torrent_{clientID}_{deleteFiles}
+	// Hash берем из кэша
+	prefix := "confirm_delete_torrent_"
+	if !strings.HasPrefix(data, prefix) {
+		logger.Warn("Пользователь %d отправил неверный формат подтверждения удаления: %s", chatId, data)
+		return
+	}
+	
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Пользователь %d отправил неверный формат подтверждения удаления: %s", chatId, data)
+		return
+	}
+	
+	clientIDStr := parts[0]
+	deleteFilesStr := parts[1]
+
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		return
+	}
+
+	// Получаем hash из кэша
+	cache, exists := ch.clientHdlr.torrentFilesCache[chatId]
+	if !exists || cache == nil || cache.ExistingHash == "" {
+		logger.Warn("Кэш торрент файла не найден или hash отсутствует для пользователя %d", chatId)
+		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка: данные торрента не найдены. Начните заново.")
+		ch.msgSender.Send(msg)
+		return
+	}
+
+	deleteFiles := deleteFilesStr == "true"
+	logger.Debugf("Пользователь %d подтвердил удаление торрента для клиента %d, hash: %s, deleteFiles: %v", chatId, clientID, cache.ExistingHash, deleteFiles)
+	ch.clientHdlr.HandleDeleteExistingTorrent(chatId, clientID, cache.ExistingHash, deleteFiles)
 }
 
 func (ch *CallbackHandler) handleClientDetails(chatId int64, data string) {
