@@ -1,18 +1,54 @@
-version: "2.1"
+version: '3.8'
+
 services:
-  CWS:
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: cws_postgres
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: cws_db
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d cws_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - cws_network
+
+  cws:
     image: ghcr.io/sharkboy-j/cws:latest
-    container_name: CWS
+    container_name: cws_app
+    restart: unless-stopped
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
     environment:
-      - qb_host=
-      - qb_port=8080
-      - ssl=false
-      - qb_login=
-      - qb_password=
-      - rutracker_api_token=
-      - telegram_token=
-      - telegram_chat_id=
-      - manual_check=false
-      - duration_seconds=60
-    restart: always
-    network_mode: "host"
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=cws_db
+      # Telegram и Rutracker настройки можно передать через environment или config.json
+      # Переменные окружения имеют приоритет над config.json
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - RUTRACKER_API_TOKEN=${RUTRACKER_API_TOKEN:-}
+      - DURATION_SECONDS=${DURATION_SECONDS:-60}
+      - ONLY_MANUAL_CHECK=${ONLY_MANUAL_CHECK:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config.json:/app/config.json:ro
+    networks:
+      - cws_network
+
+networks:
+  cws_network:
+    driver: bridge
+
+# volumes:
+#   postgres_data:

@@ -1,0 +1,3 @@
+ALTER TABLE user_states
+ADD COLUMN IF NOT EXISTS menu_message_id INTEGER DEFAULT NULL;
+

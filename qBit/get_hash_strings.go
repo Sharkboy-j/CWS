@@ -13,13 +13,16 @@ func GetHashStrings(torrents []qbittorrent.Torrent) []string {
 
 	for _, v := range torrents {
 		hashes = append(hashes, v.InfohashV1)
+		counter++
 		if counter == 99 {
 			hashStrings = append(hashStrings, strings.Join(hashes, ","))
 			hashes = make([]string, 0)
 			counter = 0
-		} else {
-			counter++
 		}
+	}
+
+	if len(hashes) > 0 {
+		hashStrings = append(hashStrings, strings.Join(hashes, ","))
 	}
 
 	return hashStrings

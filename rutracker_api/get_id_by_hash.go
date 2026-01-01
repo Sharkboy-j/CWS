@@ -10,11 +10,12 @@ type hashAndNum struct {
 	Result map[string]*int `json:"result"`
 }
 
+// GetIdByHashes принимает массив строк, где каждая строка содержит хеши через запятую (до 99 штук)
 func GetIdByHashes(hashes []string, cfg *config.Config) (map[string]*int, error) {
 	fullHashSet := make(map[string]*int)
 
-	for _, v := range hashes {
-		urlPart := fmt.Sprintf("v1/get_topic_id?by=hash&val=%s&api_key=%s", v, cfg.RutrackerApiToken)
+	for _, hashBatch := range hashes {
+		urlPart := fmt.Sprintf("v1/get_topic_id?by=hash&val=%s&api_key=%s", hashBatch, cfg.RutrackerApiToken)
 		resp, err := makeRequest(cfg, urlPart)
 		if err != nil {
 			return nil, err
