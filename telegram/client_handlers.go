@@ -12,19 +12,30 @@ import (
 )
 
 type ClientHandler struct {
-	repo      *database.Repository
-	msgSender *MessageSender
-	stateMgr  *StateManager
-	cmdHdlr   *CommandHandler // Для показа списка клиентов после удаления
-	cfg       *config.Config
+	repo                  *database.Repository
+	msgSender             *MessageSender
+	stateMgr              *StateManager
+	cmdHdlr               *CommandHandler // Для показа списка клиентов после удаления
+	cfg                   *config.Config
+	missingTorrentsCache  map[int64][]missingTorrentInfo // Кэш мёртвых торрентов для пагинации (chatId -> список торрентов)
+	checkResultsCache     map[int64]*CheckResultsCache   // Кэш результатов проверки для пагинации
+}
+
+type CheckResultsCache struct {
+	Results           []ClientCheckResult
+	TotalDuration     time.Duration
+	LastCheckTime     *time.Time
+	AllMissingTorrents []missingTorrentInfo // Все мёртвые торренты со всех клиентов
 }
 
 func NewClientHandler(repo *database.Repository, msgSender *MessageSender, stateMgr *StateManager, cfg *config.Config) *ClientHandler {
 	return &ClientHandler{
-		repo:      repo,
-		msgSender: msgSender,
-		stateMgr:  stateMgr,
-		cfg:       cfg,
+		repo:                 repo,
+		msgSender:            msgSender,
+		stateMgr:             stateMgr,
+		cfg:                  cfg,
+		missingTorrentsCache: make(map[int64][]missingTorrentInfo),
+		checkResultsCache:    make(map[int64]*CheckResultsCache),
 	}
 }
 

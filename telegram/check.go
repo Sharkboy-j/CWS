@@ -195,7 +195,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 
 			for i := 0; i < displayCount; i++ {
 				info := missingTorrentsInfo[i]
-				resultText += fmt.Sprintf("• %s\n  `%s`\n", info.name, info.hash)
+				resultText += fmt.Sprintf("• `%s`\n  `%s`\n", info.name, info.hash)
 
 				if info.url != "" {
 					buttonText := info.name

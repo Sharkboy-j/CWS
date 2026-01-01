@@ -86,6 +86,17 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.dialogHdlr.FinishEditClient(chatId, true)
 	case data == "set_edit_ssl_false":
 		ch.dialogHdlr.FinishEditClient(chatId, false)
+	case data == "page_info":
+		return
+	case strings.HasPrefix(data, "page_missing_"):
+		pageStr := strings.TrimPrefix(data, "page_missing_")
+		page, err := strconv.Atoi(pageStr)
+		if err != nil {
+			logger.Warn("Пользователь %d отправил неверный номер страницы: %s", chatId, pageStr)
+			return
+		}
+		logger.Debugf("Пользователь %d запросил страницу %d мёртвых торрентов", chatId, page)
+		ch.clientHdlr.ShowMissingTorrentsPage(chatId, page)
 	}
 }
 

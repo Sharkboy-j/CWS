@@ -64,6 +64,9 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 	startTime := time.Now()
 
+	// Очищаем старый кэш результатов при новой проверке
+	delete(ch.checkResultsCache, chatId)
+
 	checkingText := fmt.Sprintf("🔍 Проверка активных торрентов для *%d* клиентов...", len(clients))
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, checkingText, nil)
 	if err != nil {
@@ -90,14 +93,28 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 	elapsed := time.Since(startTime)
 	now := time.Now()
-	resultText := ch.formatAllClientsResult(results, elapsed, &now)
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
-			tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
-		),
-	)
+	// Сохраняем результаты в кэш для пагинации
+	allMissingTorrents := ch.collectAllMissingTorrents(results)
+	ch.checkResultsCache[chatId] = &CheckResultsCache{
+		Results:           results,
+		TotalDuration:     elapsed,
+		LastCheckTime:     &now,
+		AllMissingTorrents: allMissingTorrents,
+	}
+
+	resultText, resultKeyboard := ch.formatAllClientsResult(results, elapsed, &now, 0)
+
+	// Добавляем стандартные кнопки в конец клавиатуры
+	var keyboardRows [][]tgbotapi.InlineKeyboardButton
+	if resultKeyboard != nil {
+		keyboardRows = resultKeyboard.InlineKeyboard
+	}
+	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
+		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+	))
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
 	if err != nil {
@@ -107,6 +124,38 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
 	logger.Debugf("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+}
+
+// ShowMissingTorrentsPage показывает страницу мёртвых торрентов из кэша
+func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
+	cache, exists := ch.checkResultsCache[chatId]
+	if !exists || cache == nil {
+		logger.Warn("Пользователь %d запросил страницу %d, но кэш результатов отсутствует", chatId, page)
+		msg := tgbotapi.NewMessage(chatId, "Результаты проверки устарели. Запустите проверку заново.")
+		ch.msgSender.Send(msg)
+		return
+	}
+
+	messageID := ch.stateMgr.GetMenuMessage(chatId)
+	resultText, resultKeyboard := ch.formatAllClientsResult(cache.Results, cache.TotalDuration, cache.LastCheckTime, page)
+
+	// Добавляем стандартные кнопки в конец клавиатуры
+	var keyboardRows [][]tgbotapi.InlineKeyboardButton
+	if resultKeyboard != nil {
+		keyboardRows = resultKeyboard.InlineKeyboard
+	}
+	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
+		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+	))
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
+
+	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
+	if err != nil {
+		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+		return
+	}
+	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
 func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
@@ -126,6 +175,9 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 
 	startTime := time.Now()
 
+	// Очищаем старый кэш результатов при новой проверке
+	delete(ch.checkResultsCache, chatId)
+
 	var results []ClientCheckResult
 	for _, client := range clients {
 		result := ch.checkSingleClientSilent(ctx, client)
@@ -134,14 +186,28 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 
 	elapsed := time.Since(startTime)
 	now := time.Now()
-	resultText := ch.formatAllClientsResult(results, elapsed, &now)
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
-			tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
-		),
-	)
+	// Сохраняем результаты в кэш для пагинации
+	allMissingTorrents := ch.collectAllMissingTorrents(results)
+	ch.checkResultsCache[chatId] = &CheckResultsCache{
+		Results:           results,
+		TotalDuration:     elapsed,
+		LastCheckTime:     &now,
+		AllMissingTorrents: allMissingTorrents,
+	}
+
+	resultText, resultKeyboard := ch.formatAllClientsResult(results, elapsed, &now, 0)
+
+	// Добавляем стандартные кнопки в конец клавиатуры
+	var keyboardRows [][]tgbotapi.InlineKeyboardButton
+	if resultKeyboard != nil {
+		keyboardRows = resultKeyboard.InlineKeyboard
+	}
+	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
+		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+	))
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
 	if err != nil {
@@ -369,7 +435,29 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *database
 	return result
 }
 
-func (ch *ClientHandler) formatAllClientsResult(results []ClientCheckResult, totalDuration time.Duration, lastCheckTime *time.Time) string {
+func (ch *ClientHandler) collectAllMissingTorrents(results []ClientCheckResult) []missingTorrentInfo {
+	urlMap := make(map[string]missingTorrentInfo) // Используем URL как ключ для устранения дубликатов
+
+	for _, result := range results {
+		for _, torrent := range result.MissingTorrents {
+			if torrent.url != "" {
+				// Если такой URL уже есть, пропускаем
+				if _, exists := urlMap[torrent.url]; !exists {
+					urlMap[torrent.url] = torrent
+				}
+			}
+		}
+	}
+
+	allTorrents := make([]missingTorrentInfo, 0, len(urlMap))
+	for _, torrent := range urlMap {
+		allTorrents = append(allTorrents, torrent)
+	}
+
+	return allTorrents
+}
+
+func (ch *ClientHandler) formatAllClientsResult(results []ClientCheckResult, totalDuration time.Duration, lastCheckTime *time.Time, page int) (string, *tgbotapi.InlineKeyboardMarkup) {
 	var text strings.Builder
 	text.WriteString("📊 *Результаты проверки всех клиентов*\n\n")
 	text.WriteString(fmt.Sprintf("⏱ Общее время: *%s*\n", formatDuration(totalDuration)))
@@ -377,6 +465,8 @@ func (ch *ClientHandler) formatAllClientsResult(results []ClientCheckResult, tot
 		text.WriteString(fmt.Sprintf("🕐 Последняя проверка: *%s*\n", lastCheckTime.Format("02.01.2006 15:04:05")))
 	}
 	text.WriteString("\n---\n\n")
+
+	var keyboardRows [][]tgbotapi.InlineKeyboardButton
 
 	for _, result := range results {
 		if result.Error != "" {
@@ -388,11 +478,91 @@ func (ch *ClientHandler) formatAllClientsResult(results []ClientCheckResult, tot
 			text.WriteString(fmt.Sprintf("   🔍 Отфильтровано: *%d*\n", result.FilteredTorrents))
 			text.WriteString(fmt.Sprintf("   ✅ Актуальных: *%d*/*%d*\n", result.FoundInRutracker, result.FilteredTorrents))
 			if len(result.MissingTorrents) > 0 {
-				text.WriteString(fmt.Sprintf("   ⚠️ Не найдено: *%d*\n", len(result.MissingTorrents)))
+				text.WriteString(fmt.Sprintf("   ⚠️ Не найдено: *%d*\n\n", len(result.MissingTorrents)))
+
+				maxDisplay := 20
+				displayCount := len(result.MissingTorrents)
+				if displayCount > maxDisplay {
+					displayCount = maxDisplay
+					text.WriteString(fmt.Sprintf("   _Показано первых %d из %d:_\n\n", maxDisplay, len(result.MissingTorrents)))
+				}
+
+				for i := 0; i < displayCount; i++ {
+					info := result.MissingTorrents[i]
+					text.WriteString(fmt.Sprintf("   • `%s`\n     `%s`\n", info.name, info.hash))
+				}
+				text.WriteString("\n")
 			}
 			text.WriteString(fmt.Sprintf("   ⏱ *%s*\n\n", formatDuration(result.Duration)))
 		}
 	}
 
-	return text.String()
+	allMissingTorrents := ch.collectAllMissingTorrents(results)
+
+	const buttonsPerPage = 5
+
+	if len(allMissingTorrents) > 0 {
+		totalPages := (len(allMissingTorrents) + buttonsPerPage - 1) / buttonsPerPage
+		if totalPages == 0 {
+			totalPages = 1
+		}
+
+		if page < 0 {
+			page = 0
+		}
+		if page >= totalPages {
+			page = totalPages - 1
+		}
+
+		startIdx := page * buttonsPerPage
+		endIdx := startIdx + buttonsPerPage
+		if endIdx > len(allMissingTorrents) {
+			endIdx = len(allMissingTorrents)
+		}
+
+		if len(allMissingTorrents) > buttonsPerPage {
+			for i := startIdx; i < endIdx; i++ {
+				info := allMissingTorrents[i]
+				buttonText := info.name
+				if len(buttonText) > 60 {
+					buttonText = buttonText[:57] + "..."
+				}
+				keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL(buttonText, info.url),
+				))
+			}
+
+			if totalPages > 1 {
+				var navButtons []tgbotapi.InlineKeyboardButton
+				if page > 0 {
+					navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("◀️ Назад", fmt.Sprintf("page_missing_%d", page-1)))
+				}
+				navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%d/%d", page+1, totalPages), "page_info"))
+				if page < totalPages-1 {
+					navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("Вперёд ▶️", fmt.Sprintf("page_missing_%d", page+1)))
+				}
+				if len(navButtons) > 0 {
+					keyboardRows = append(keyboardRows, navButtons)
+				}
+			}
+		} else {
+			for i := 0; i < len(allMissingTorrents); i++ {
+				info := allMissingTorrents[i]
+				buttonText := info.name
+				if len(buttonText) > 60 {
+					buttonText = buttonText[:57] + "..."
+				}
+				keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonURL(buttonText, info.url),
+				))
+			}
+		}
+	}
+
+	var keyboard *tgbotapi.InlineKeyboardMarkup
+	if len(keyboardRows) > 0 {
+		keyboard = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: keyboardRows}
+	}
+
+	return text.String(), keyboard
 }
