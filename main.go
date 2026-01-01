@@ -6,7 +6,6 @@ import (
 	"cws/database"
 	"cws/logger"
 	"cws/telegram"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
