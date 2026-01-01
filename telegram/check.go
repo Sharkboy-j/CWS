@@ -6,8 +6,6 @@ import (
 	"cws/qBit"
 	"cws/rutracker_api"
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/autobrr/go-qbittorrent"
@@ -26,6 +24,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
@@ -36,6 +35,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
@@ -45,6 +45,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, checkingText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -58,6 +59,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
@@ -65,6 +67,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, connectingText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	messageID = newMessageID
@@ -77,6 +80,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
@@ -84,6 +88,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, filteringText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	messageID = newMessageID
@@ -96,6 +101,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
@@ -110,6 +116,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, checkingRutrackerText, nil)
 		if err != nil {
 			logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 			return
 		}
 		messageID = newMessageID
@@ -124,6 +131,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 			if err == nil {
 				ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 			}
+
 			return
 		}
 	}
@@ -222,32 +230,10 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
 	logger.Debugf("Пользователь %d получил результат проверки клиента %s: %d активных торрентов, время выполнения: %v", chatId, client.Name, count, elapsed)
-}
-
-func extractURLFromComment(comment string) string {
-	if comment == "" {
-		return ""
-	}
-
-	urlPattern := regexp.MustCompile(`https?://[^\s<>"{}|\\^` + "`" + `\[\]]+`)
-	matches := urlPattern.FindString(comment)
-	if matches != "" {
-		return matches
-	}
-
-	rutrackerPattern := regexp.MustCompile(`(?:rutracker\.org|rutracker\.cc)/[^\s<>"{}|\\^` + "`" + `\[\]]+`)
-	matches = rutrackerPattern.FindString(comment)
-	if matches != "" {
-		if !strings.HasPrefix(matches, "http://") && !strings.HasPrefix(matches, "https://") {
-			return "https://" + matches
-		}
-		return matches
-	}
-
-	return ""
 }

@@ -1,0 +1,30 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+linters-settings:
+  nlreturn:
+    # Require empty line before return statement only if there are statements before it
+    block-size: 1
+    # Minimum number of statements in a function to require newline before return
+    # Set to 1 to require newline only if there's at least one statement before return
+    min-lines: 1
+
+linters:
+  enable:
+    - nlreturn
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0

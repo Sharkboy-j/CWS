@@ -1,4 +1,4 @@
-package database
+package store
 
 import (
 	"context"
@@ -20,9 +20,12 @@ func ensureDatabase(host string, port int, user, password, dbname string) error 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		logger.Error("Ошибка при подключении к postgres: %v", err)
+
 		return fmt.Errorf("failed to connect to postgres database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	var exists bool
 	err = db.QueryRow(
@@ -31,6 +34,7 @@ func ensureDatabase(host string, port int, user, password, dbname string) error 
 	).Scan(&exists)
 	if err != nil {
 		logger.Error("Ошибка при проверке существования БД %s: %v", dbname, err)
+
 		return fmt.Errorf("failed to check database existence: %w", err)
 	}
 
@@ -39,6 +43,7 @@ func ensureDatabase(host string, port int, user, password, dbname string) error 
 		_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbname))
 		if err != nil {
 			logger.Error("Ошибка при создании БД %s: %v", dbname, err)
+
 			return fmt.Errorf("failed to create database: %w", err)
 		}
 		logger.Info("БД %s успешно создана", dbname)
@@ -49,25 +54,27 @@ func ensureDatabase(host string, port int, user, password, dbname string) error 
 	return nil
 }
 
-// runMigrations применяет все миграции из папки migrations
 func (r *Repository) runMigrations(ctx context.Context) error {
 	if err := r.createMigrationsTable(ctx); err != nil {
+
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
 	appliedMigrations, err := r.getAppliedMigrations(ctx)
 	if err != nil {
+
 		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
-	migrationsDir := "database/migrations"
+	migrationsDir := "store/migrations"
 	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
 		wd, _ := os.Getwd()
-		migrationsDir = filepath.Join(wd, "database", "migrations")
+		migrationsDir = filepath.Join(wd, "store", "migrations")
 	}
 
 	entries, err := os.ReadDir(migrationsDir)
 	if err != nil {
+
 		return fmt.Errorf("failed to read migrations directory %s: %w", migrationsDir, err)
 	}
 
@@ -81,6 +88,7 @@ func (r *Repository) runMigrations(ctx context.Context) error {
 	sort.Slice(migrationFiles, func(i, j int) bool {
 		numI := extractMigrationNumber(migrationFiles[i])
 		numJ := extractMigrationNumber(migrationFiles[j])
+
 		return numI < numJ
 	})
 
@@ -89,33 +97,39 @@ func (r *Repository) runMigrations(ctx context.Context) error {
 		migrationNum := extractMigrationNumber(file)
 
 		if appliedMigrations[migrationName] {
+
 			continue
 		}
 
 		content, err := os.ReadFile(file)
 		if err != nil {
+
 			return fmt.Errorf("failed to read migration %s: %w", migrationName, err)
 		}
 
 		tx, err := r.db.BeginTx(ctx, nil)
 		if err != nil {
+
 			return fmt.Errorf("failed to begin transaction for migration %s: %w", migrationName, err)
 		}
 
 		if _, err := tx.ExecContext(ctx, string(content)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
+
 			return fmt.Errorf("failed to execute migration %s: %w", migrationName, err)
 		}
 
 		if _, err := tx.ExecContext(ctx,
 			"INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW())",
 			migrationName); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
+
 			return fmt.Errorf("failed to record migration %s: %w", migrationName, err)
 		}
 
 		if err := tx.Commit(); err != nil {
 			logger.Error("Ошибка при коммите миграции %s: %v", migrationName, err)
+
 			return fmt.Errorf("failed to commit migration %s: %w", migrationName, err)
 		}
 
@@ -125,7 +139,6 @@ func (r *Repository) runMigrations(ctx context.Context) error {
 	return nil
 }
 
-// createMigrationsTable создает таблицу для отслеживания миграций
 func (r *Repository) createMigrationsTable(ctx context.Context) error {
 	query := `
 	CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -134,21 +147,25 @@ func (r *Repository) createMigrationsTable(ctx context.Context) error {
 	);
 	`
 	_, err := r.db.ExecContext(ctx, query)
+
 	return err
 }
 
-// getAppliedMigrations возвращает карту примененных миграций
 func (r *Repository) getAppliedMigrations(ctx context.Context) (map[string]bool, error) {
 	rows, err := r.db.QueryContext(ctx, "SELECT version FROM schema_migrations")
 	if err != nil {
+
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	applied := make(map[string]bool)
 	for rows.Next() {
 		var version string
 		if err := rows.Scan(&version); err != nil {
+
 			return nil, err
 		}
 		applied[version] = true
@@ -157,16 +174,17 @@ func (r *Repository) getAppliedMigrations(ctx context.Context) (map[string]bool,
 	return applied, rows.Err()
 }
 
-// extractMigrationNumber извлекает номер миграции из имени файла
 func extractMigrationNumber(filename string) int {
 	base := filepath.Base(filename)
 	parts := strings.Split(base, "_")
 	if len(parts) == 0 {
+
 		return 0
 	}
 
 	num, err := strconv.Atoi(parts[0])
 	if err != nil {
+
 		return 0
 	}
 

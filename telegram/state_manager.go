@@ -2,18 +2,18 @@ package telegram
 
 import (
 	"context"
-	"cws/database"
 	"cws/logger"
+	"cws/store"
 )
 
 type StateManager struct {
-	repo          *database.Repository
-	userState     map[int64]string // Кэш состояний в памяти (синхронизируется с БД)
-	dialogMessage map[int64]int    // Кэш message_id для диалогов (не сохраняется в БД)
-	menuMessage   map[int64]int    // Кэш message_id для меню клиентов (не сохраняется в БД)
+	repo          *store.Repository
+	userState     map[int64]string
+	dialogMessage map[int64]int
+	menuMessage   map[int64]int
 }
 
-func NewStateManager(repo *database.Repository) (*StateManager, error) {
+func NewStateManager(repo *store.Repository) (*StateManager, error) {
 	sm := &StateManager{
 		repo:          repo,
 		userState:     make(map[int64]string),
@@ -52,6 +52,7 @@ func (sm *StateManager) SetUserState(chatId int64, state string) {
 
 func (sm *StateManager) GetUserState(chatId int64) (string, bool) {
 	state, exists := sm.userState[chatId]
+
 	return state, exists
 }
 
@@ -69,6 +70,7 @@ func (sm *StateManager) SetDialogMessage(chatId int64, messageID int) {
 }
 
 func (sm *StateManager) GetDialogMessage(chatId int64) int {
+
 	return sm.dialogMessage[chatId]
 }
 
@@ -81,5 +83,6 @@ func (sm *StateManager) SetMenuMessage(chatId int64, messageID int) {
 }
 
 func (sm *StateManager) GetMenuMessage(chatId int64) int {
+
 	return sm.menuMessage[chatId]
 }

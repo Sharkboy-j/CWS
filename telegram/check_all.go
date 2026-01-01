@@ -2,10 +2,10 @@ package telegram
 
 import (
 	"context"
-	"cws/database"
 	"cws/logger"
 	"cws/qBit"
 	"cws/rutracker_api"
+	"cws/store"
 	"fmt"
 	"strings"
 	"time"
@@ -42,6 +42,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
@@ -59,18 +60,19 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 		if err == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
+
 		return
 	}
 
 	startTime := time.Now()
 
-	// Очищаем старый кэш результатов при новой проверке
 	delete(ch.checkResultsCache, chatId)
 
 	checkingText := fmt.Sprintf("🔍 Проверка активных торрентов для *%d* клиентов...", len(clients))
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, checkingText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -94,7 +96,6 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	elapsed := time.Since(startTime)
 	now := time.Now()
 
-	// Сохраняем результаты в кэш для пагинации
 	allMissingTorrents := ch.collectAllMissingTorrents(results)
 	ch.checkResultsCache[chatId] = &CheckResultsCache{
 		Results:            results,
@@ -105,7 +106,6 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &now, 0)
 
-	// Добавляем стандартные кнопки в конец клавиатуры
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
 	if resultKeyboard != nil {
 		keyboardRows = resultKeyboard.InlineKeyboard
@@ -119,6 +119,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -126,21 +127,19 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	logger.Debugf("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
 }
 
-// ShowMissingTorrentsPage показывает страницу мёртвых торрентов из кэша
 func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
 	ctx := context.Background()
 	cache, exists := ch.checkResultsCache[chatId]
 	if !exists || cache == nil {
 		logger.Warn("Пользователь %d запросил страницу %d, но кэш результатов отсутствует", chatId, page)
-		msg := tgbotapi.NewMessage(chatId, "Результаты проверки устарели. Запустите проверку заново.")
-		ch.msgSender.Send(msg)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Результаты проверки устарели. Запустите проверку заново.", nil)
+
 		return
 	}
 
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, cache.Results, cache.TotalDuration, cache.LastCheckTime, page)
 
-	// Добавляем стандартные кнопки в конец клавиатуры
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
 	if resultKeyboard != nil {
 		keyboardRows = resultKeyboard.InlineKeyboard
@@ -154,6 +153,7 @@ func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -166,20 +166,20 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
+
 		return
 	}
 
 	if len(clients) == 0 {
 		logger.Debug("Нет клиентов для пользователя %d", chatId)
+
 		return
 	}
 
 	startTime := time.Now()
 
-	// Очищаем старый кэш результатов при новой проверке
 	delete(ch.checkResultsCache, chatId)
 
-	// Показываем начало проверки
 	statusText := fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Начинаю проверку %d клиентов...", len(clients))
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -195,7 +195,6 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 
 	var results []ClientCheckResult
 	for i, client := range clients {
-		// Обновляем статус проверки
 		statusText = fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Проверяю клиентов...\n\n✅ Проверено: %d/%d\n🔍 Проверяю: *%s*", i, len(clients), client.Name)
 		newMessageID, _ = ch.msgSender.SendOrEdit(chatId, messageID, statusText, &keyboard)
 		if newMessageID > 0 {
@@ -209,7 +208,6 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	elapsed := time.Since(startTime)
 	now := time.Now()
 
-	// Сохраняем результаты в кэш для пагинации
 	allMissingTorrents := ch.collectAllMissingTorrents(results)
 	ch.checkResultsCache[chatId] = &CheckResultsCache{
 		Results:            results,
@@ -220,7 +218,6 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 
 	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &now, 0)
 
-	// Добавляем стандартные кнопки в конец клавиатуры
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
 	if resultKeyboard != nil {
 		keyboardRows = resultKeyboard.InlineKeyboard
@@ -234,6 +231,7 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &finalKeyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении/отправке сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 
@@ -242,7 +240,7 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	logger.Debugf("Автоматическая проверка завершена для пользователя %d: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
 }
 
-func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *database.Client) ClientCheckResult {
+func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *store.Client) ClientCheckResult {
 	startTime := time.Now()
 	result := ClientCheckResult{
 		ClientName: client.Name,
@@ -252,6 +250,7 @@ func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *da
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка подключения: %v", err)
 		result.Duration = time.Since(startTime)
+
 		return result
 	}
 
@@ -259,6 +258,7 @@ func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *da
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка получения торрентов: %v", err)
 		result.Duration = time.Since(startTime)
+
 		return result
 	}
 	result.ActiveTorrents = len(activeTorrents)
@@ -267,12 +267,14 @@ func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *da
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка фильтрации: %v", err)
 		result.Duration = time.Since(startTime)
+
 		return result
 	}
 	result.FilteredTorrents = len(torrents)
 
 	if len(torrents) == 0 {
 		result.Duration = time.Since(startTime)
+
 		return result
 	}
 
@@ -287,53 +289,17 @@ func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *da
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка API рутрекера: %v", err)
 		result.Duration = time.Since(startTime)
+
 		return result
 	}
 
-	foundCount := 0
-	for _, topicID := range rutrackerResults {
-		if topicID != nil {
-			foundCount++
-		}
-	}
-	result.FoundInRutracker = foundCount
-
-	if rutrackerResults != nil {
-		for hash, torrent := range torrentByHash {
-			topicID, exists := rutrackerResults[hash]
-			if !exists || topicID == nil {
-				props, err := qBit.GetTorrentPropertiesCached(ctx, qbClient, torrent.Hash)
-				url := ""
-				if err == nil && props != nil {
-					url = extractURLFromComment(props.Comment)
-				}
-				result.MissingTorrents = append(result.MissingTorrents, missingTorrentInfo{
-					name: torrent.Name,
-					hash: hash,
-					url:  url,
-				})
-			}
-		}
-	} else {
-		for hash, torrent := range torrentByHash {
-			props, err := qBit.GetTorrentPropertiesCached(ctx, qbClient, torrent.Hash)
-			url := ""
-			if err == nil && props != nil {
-				url = extractURLFromComment(props.Comment)
-			}
-			result.MissingTorrents = append(result.MissingTorrents, missingTorrentInfo{
-				name: torrent.Name,
-				hash: hash,
-				url:  url,
-			})
-		}
-	}
-
+	result.FoundInRutracker, result.MissingTorrents = processRutrackerResults(ctx, qbClient, torrentByHash, rutrackerResults)
 	result.Duration = time.Since(startTime)
+
 	return result
 }
 
-func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *database.Client, chatId int64, messageID int) ClientCheckResult {
+func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *store.Client, chatId int64, messageID int) ClientCheckResult {
 	startTime := time.Now()
 	result := ClientCheckResult{
 		ClientName: client.Name,
@@ -351,7 +317,8 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *database
 		result.Error = fmt.Sprintf("Ошибка подключения: %v", err)
 		result.Duration = time.Since(startTime)
 		errorText := fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*:\n`%v`", client.Name, err)
-		ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+
 		return result
 	}
 
@@ -366,7 +333,8 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *database
 		result.Error = fmt.Sprintf("Ошибка получения торрентов: %v", err)
 		result.Duration = time.Since(startTime)
 		errorText := fmt.Sprintf("❌ Ошибка при получении торрентов от клиента *%s*:\n`%v`", client.Name, err)
-		ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+
 		return result
 	}
 	result.ActiveTorrents = len(activeTorrents)
@@ -382,13 +350,15 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *database
 		result.Error = fmt.Sprintf("Ошибка фильтрации: %v", err)
 		result.Duration = time.Since(startTime)
 		errorText := fmt.Sprintf("❌ Ошибка при фильтрации торрентов от клиента *%s*:\n`%v`", client.Name, err)
-		ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+
 		return result
 	}
 	result.FilteredTorrents = len(torrents)
 
 	if len(torrents) == 0 {
 		result.Duration = time.Since(startTime)
+
 		return result
 	}
 
@@ -410,60 +380,23 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *database
 		result.Error = fmt.Sprintf("Ошибка API рутрекера: %v", err)
 		result.Duration = time.Since(startTime)
 		errorText := fmt.Sprintf("❌ Ошибка при проверке хешей в API рутрекера от клиента *%s*:\n`%v`", client.Name, err)
-		ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+
 		return result
 	}
 
-	foundCount := 0
-	for _, topicID := range rutrackerResults {
-		if topicID != nil {
-			foundCount++
-		}
-	}
-	result.FoundInRutracker = foundCount
-
-	if rutrackerResults != nil {
-		for hash, torrent := range torrentByHash {
-			topicID, exists := rutrackerResults[hash]
-			if !exists || topicID == nil {
-				props, err := qBit.GetTorrentPropertiesCached(ctx, qbClient, torrent.Hash)
-				url := ""
-				if err == nil && props != nil {
-					url = extractURLFromComment(props.Comment)
-				}
-				result.MissingTorrents = append(result.MissingTorrents, missingTorrentInfo{
-					name: torrent.Name,
-					hash: hash,
-					url:  url,
-				})
-			}
-		}
-	} else {
-		for hash, torrent := range torrentByHash {
-			props, err := qBit.GetTorrentPropertiesCached(ctx, qbClient, torrent.Hash)
-			url := ""
-			if err == nil && props != nil {
-				url = extractURLFromComment(props.Comment)
-			}
-			result.MissingTorrents = append(result.MissingTorrents, missingTorrentInfo{
-				name: torrent.Name,
-				hash: hash,
-				url:  url,
-			})
-		}
-	}
-
+	result.FoundInRutracker, result.MissingTorrents = processRutrackerResults(ctx, qbClient, torrentByHash, rutrackerResults)
 	result.Duration = time.Since(startTime)
+
 	return result
 }
 
 func (ch *ClientHandler) collectAllMissingTorrents(results []ClientCheckResult) []missingTorrentInfo {
-	urlMap := make(map[string]missingTorrentInfo) // Используем URL как ключ для устранения дубликатов
+	urlMap := make(map[string]missingTorrentInfo)
 
 	for _, result := range results {
 		for _, torrent := range result.MissingTorrents {
 			if torrent.url != "" {
-				// Если такой URL уже есть, пропускаем
 				if _, exists := urlMap[torrent.url]; !exists {
 					urlMap[torrent.url] = torrent
 				}

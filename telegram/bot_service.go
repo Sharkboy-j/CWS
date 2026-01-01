@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"cws/config"
-	"cws/database"
+	"cws/store"
 	"cws/logger"
+	"cws/telegram/messaging"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,9 +21,9 @@ type BotService struct {
 	bot          *tgbotapi.BotAPI
 	chatId       int64
 	token        string
-	repo         *database.Repository
+	repo         *store.Repository
 	stateMgr     *StateManager
-	msgSender    *MessageSender
+	msgSender    messaging.MessageSender
 	cmdHdlr      *CommandHandler
 	callbackHdlr *CallbackHandler
 	dialogHdlr   *DialogHandler
@@ -30,7 +31,7 @@ type BotService struct {
 	autoChecker  *AutoChecker
 }
 
-func NewBotService(token string, chatId int64, repo *database.Repository, cfg *config.Config) (*BotService, error) {
+func NewBotService(token string, chatId int64, repo *store.Repository, cfg *config.Config) (*BotService, error) {
 	bot, err := InitBot(token)
 	if err != nil {
 		return nil, err
@@ -41,7 +42,7 @@ func NewBotService(token string, chatId int64, repo *database.Repository, cfg *c
 		return nil, fmt.Errorf("failed to create state manager: %w", err)
 	}
 
-	msgSender := NewMessageSender(bot)
+	msgSender := messaging.NewMessageSender(bot)
 
 	service := &BotService{
 		bot:       bot,
@@ -109,6 +110,7 @@ func (bs *BotService) setupCommands() error {
 	}
 
 	logger.Info("Команды бота установлены успешно")
+
 	return nil
 }
 
@@ -133,13 +135,16 @@ func (bs *BotService) setupMenuButton() error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	logger.Info("Menu Button установлен успешно")
+
 	return nil
 }
 
@@ -155,6 +160,7 @@ func (bs *BotService) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			logger.Info("Получен сигнал остановки, завершаем работу бота...")
 			bs.bot.StopReceivingUpdates()
+
 			return nil
 		case update := <-updates:
 			logger.Debug("Получено обновление: UpdateID=%d", update.UpdateID)
@@ -169,6 +175,7 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 		username := update.CallbackQuery.From.UserName
 		logger.Debugf("Пользователь %d (@%s) нажал на кнопку: %s", chatId, username, update.CallbackQuery.Data)
 		bs.callbackHdlr.HandleCallbackQuery(update.CallbackQuery)
+
 		return
 	}
 
@@ -182,6 +189,7 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 		bs.cmdHdlr.HandleCommand(update.Message)
 
 		bs.msgSender.DeleteMessage(chatId, messageID)
+
 		return
 	}
 
@@ -190,14 +198,13 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 		username := update.Message.From.UserName
 		logger.Debugf("Пользователь %d (@%s) отправил сообщение: %s", chatId, username, update.Message.Text)
 
-		// Обрабатываем локацию для определения часового пояса
 		if update.Message.Location != nil {
 			bs.handleUserLocation(chatId, update.Message.Location)
 		}
 
-		// Обрабатываем торрент файл
 		if update.Message.Document != nil {
 			bs.handleTorrentFile(chatId, update.Message)
+
 			return
 		}
 
@@ -205,37 +212,26 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 	}
 }
 
-// handleUserLocation обрабатывает локацию пользователя для определения часового пояса
 func (bs *BotService) handleUserLocation(chatId int64, location *tgbotapi.Location) {
 	ctx := context.Background()
 	logger.Debugf("Пользователь %d отправил локацию: lat=%.6f, lon=%.6f", chatId, location.Latitude, location.Longitude)
 
-	// Определяем часовой пояс по координатам
-	// Используем простой подход: определяем часовой пояс по долготе
-	// Более точный способ - использовать API для определения часового пояса
 	timezone := determineTimezoneByCoordinates(location.Latitude, location.Longitude)
 
-	// Сохраняем часовой пояс пользователя
 	err := bs.repo.SetUserTimezone(ctx, chatId, timezone)
 	if err != nil {
 		logger.Error("Ошибка при сохранении часового пояса для пользователя %d: %v", chatId, err)
+
 		return
 	}
 
 	logger.Info("Часовой пояс пользователя %d установлен: %s", chatId, timezone)
-	msg := tgbotapi.NewMessage(chatId, fmt.Sprintf("✅ Часовой пояс установлен: %s", timezone))
-	bs.msgSender.Send(msg)
+	_, _ = bs.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("✅ Часовой пояс установлен: %s", timezone), nil)
 }
 
-// determineTimezoneByCoordinates определяет часовой пояс по координатам
-// Это упрощенная версия, для более точного определения можно использовать API
-// Возвращает IANA timezone name или UTC по умолчанию
 func determineTimezoneByCoordinates(lat, lon float64) string {
-	// Упрощенный подход: определяем часовой пояс по долготе
-	// Каждые 15 градусов долготы = 1 час разницы от UTC
 	offset := int(lon / 15.0)
 
-	// Ограничиваем диапазон от -12 до +14
 	if offset < -12 {
 		offset = -12
 	}
@@ -243,8 +239,6 @@ func determineTimezoneByCoordinates(lat, lon float64) string {
 		offset = 14
 	}
 
-	// Маппинг смещения на популярные IANA timezone
-	// Это упрощенный подход, для точности лучше использовать API
 	timezoneMap := map[int]string{
 		-12: "Etc/GMT+12",
 		-11: "Pacific/Midway",
@@ -261,7 +255,7 @@ func determineTimezoneByCoordinates(lat, lon float64) string {
 		0:   "UTC",
 		1:   "Europe/Paris",
 		2:   "Europe/Berlin",
-		3:   "Europe/Moscow",
+		3:   "Europe/Minsk",
 		4:   "Asia/Dubai",
 		5:   "Asia/Karachi",
 		6:   "Asia/Dhaka",
@@ -279,48 +273,47 @@ func determineTimezoneByCoordinates(lat, lon float64) string {
 		return tz
 	}
 
-	// Если смещение не найдено, используем UTC
 	return "UTC"
 }
 
-// handleTorrentFile обрабатывает получение торрент файла от пользователя
 func (bs *BotService) handleTorrentFile(chatId int64, message *tgbotapi.Message) {
 	ctx := context.Background()
 	state, exists := bs.stateMgr.GetUserState(chatId)
 	if !exists || !strings.HasPrefix(state, "add_torrent_wait_file_") {
 		logger.Debug("Пользователь %d отправил файл, но не в процессе добавления торрента", chatId)
+
 		return
 	}
 
-	// Извлекаем ID клиента из состояния (формат: add_torrent_wait_file_{clientID})
 	prefix := "add_torrent_wait_file_"
 	clientIDStr := strings.TrimPrefix(state, prefix)
 	if clientIDStr == state {
 		logger.Warn("Неверный формат состояния для добавления торрента: %s", state)
+
 		return
 	}
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Error("Ошибка при парсинге ID клиента из состояния: %v", err)
+
 		return
 	}
 
 	document := message.Document
 	if document == nil {
 		logger.Warn("Документ не найден в сообщении")
+
 		return
 	}
 
-	// Проверяем, что это торрент файл
 	if !strings.HasSuffix(strings.ToLower(document.FileName), ".torrent") {
-		msg := tgbotapi.NewMessage(chatId, "❌ Пожалуйста, отправьте файл с расширением .torrent")
-		bs.msgSender.Send(msg)
+		_, _ = bs.msgSender.SendOrEdit(chatId, 0, "❌ Пожалуйста, отправьте файл с расширением .torrent", nil)
+
 		return
 	}
 
 	logger.Debugf("Пользователь %d отправил торрент файл %s для клиента %d", chatId, document.FileName, clientID)
 
-	// Сразу обновляем сообщение, показывая что файл получен и обрабатывается
 	text := fmt.Sprintf("📥 *Обработка торрент файла*\n\n📎 Файл: `%s`\n\n⏳ Обрабатываю...", document.FileName)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -333,36 +326,34 @@ func (bs *BotService) handleTorrentFile(chatId int64, message *tgbotapi.Message)
 		logger.Warn("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
 	}
 
-	// Скачиваем файл
 	fileURL, err := bs.bot.GetFileDirectURL(document.FileID)
 	if err != nil {
 		logger.Error("Ошибка при получении URL файла: %v", err)
-		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка при получении файла")
-		bs.msgSender.Send(msg)
+		_, _ = bs.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении файла", nil)
+
 		return
 	}
 
-	// Скачиваем содержимое файла
 	resp, err := http.Get(fileURL)
 	if err != nil {
 		logger.Error("Ошибка при скачивании файла: %v", err)
-		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка при скачивании файла")
-		bs.msgSender.Send(msg)
+		_, _ = bs.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при скачивании файла", nil)
+
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	torrentData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error("Ошибка при чтении файла: %v", err)
-		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка при чтении файла")
-		bs.msgSender.Send(msg)
+		_, _ = bs.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при чтении файла", nil)
+
 		return
 	}
 
-	// Сохраняем файл во временное состояние и переходим к выбору пути
 	bs.clientHdlr.HandleTorrentFileReceived(ctx, chatId, clientID, torrentData, document.FileName)
-	
-	// Удаляем сообщение с файлом после обработки
+
 	bs.msgSender.DeleteMessage(chatId, message.MessageID)
 }

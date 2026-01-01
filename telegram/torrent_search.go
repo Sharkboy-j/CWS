@@ -2,9 +2,10 @@ package telegram
 
 import (
 	"context"
-	"cws/database"
 	"cws/logger"
 	"cws/qBit"
+	"cws/store"
+	"cws/telegram/messaging"
 	"fmt"
 	"strings"
 
@@ -25,13 +26,13 @@ type TorrentSearchResult struct {
 }
 
 type TorrentSearchService struct {
-	repo               *database.Repository
-	msgSender          *MessageSender
+	repo               *store.Repository
+	msgSender          messaging.MessageSender
 	stateMgr           *StateManager
 	torrentSearchCache map[int64]*TorrentSearchCache
 }
 
-func NewTorrentSearchService(repo *database.Repository, msgSender *MessageSender, stateMgr *StateManager) *TorrentSearchService {
+func NewTorrentSearchService(repo *store.Repository, msgSender messaging.MessageSender, stateMgr *StateManager) *TorrentSearchService {
 	return &TorrentSearchService{
 		repo:               repo,
 		msgSender:          msgSender,
@@ -40,7 +41,6 @@ func NewTorrentSearchService(repo *database.Repository, msgSender *MessageSender
 	}
 }
 
-// StartTorrentSearchDialog запускает диалог для поиска торрента
 func (tss *TorrentSearchService) StartTorrentSearchDialog(chatId int64) {
 	tss.stateMgr.SetUserState(chatId, "search_torrent_query")
 	text := "🔎 *Поиск торрента*\n\nВведите хеш или название торрента (частичное или полное):"
@@ -53,12 +53,12 @@ func (tss *TorrentSearchService) StartTorrentSearchDialog(chatId int64) {
 	newMessageID, err := tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	tss.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
-// SearchTorrents выполняет поиск торрентов по всем клиентам пользователя
 func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 	ctx := context.Background()
 
@@ -72,7 +72,8 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 			),
 		)
 		messageID := tss.stateMgr.GetMenuMessage(chatId)
-		tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		_, _ = tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+
 		return
 	}
 
@@ -87,7 +88,8 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 			),
 		)
 		messageID := tss.stateMgr.GetMenuMessage(chatId)
-		tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		_, _ = tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+
 		return
 	}
 
@@ -100,12 +102,14 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 		qbClient, err := qBit.CreateClient(ctx, client)
 		if err != nil {
 			logger.Warn("Ошибка при подключении к клиенту %s для поиска: %v", client.Name, err)
+
 			continue
 		}
 
 		torrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
 		if err != nil {
 			logger.Warn("Ошибка при получении торрентов от клиента %s: %v", client.Name, err)
+
 			continue
 		}
 
@@ -144,7 +148,6 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 	tss.showSearchResults(chatId, query, searchResults, 0)
 }
 
-// ShowSearchResultsPage показывает страницу результатов поиска из кэша
 func (tss *TorrentSearchService) ShowSearchResultsPage(chatId int64, page int) {
 	cache, exists := tss.torrentSearchCache[chatId]
 	if !exists || cache == nil {
@@ -159,33 +162,33 @@ func (tss *TorrentSearchService) ShowSearchResultsPage(chatId int64, page int) {
 			),
 		)
 		messageID := tss.stateMgr.GetMenuMessage(chatId)
-		tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		_, _ = tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+
 		return
 	}
 
 	tss.showSearchResults(chatId, cache.Query, cache.Results, page)
 }
 
-// GetSearchResult возвращает результат поиска по индексу из кэша
 func (tss *TorrentSearchService) GetSearchResult(chatId int64, index int) (*TorrentSearchResult, error) {
 	cache, exists := tss.torrentSearchCache[chatId]
 	if !exists || cache == nil {
+
 		return nil, fmt.Errorf("кэш результатов поиска не найден")
 	}
 
 	if index < 0 || index >= len(cache.Results) {
+
 		return nil, fmt.Errorf("неверный индекс результата: %d", index)
 	}
 
 	return &cache.Results[index], nil
 }
 
-// ClearSearchCache очищает кэш результатов поиска для пользователя
 func (tss *TorrentSearchService) ClearSearchCache(chatId int64) {
 	delete(tss.torrentSearchCache, chatId)
 }
 
-// showSearchResults отображает результаты поиска
 func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, results []TorrentSearchResult, page int) {
 	messageID := tss.stateMgr.GetMenuMessage(chatId)
 
@@ -199,7 +202,8 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
 			),
 		)
-		tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		_, _ = tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+
 		return
 	}
 
@@ -236,12 +240,10 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 			displayName = displayName[:47] + "..."
 		}
 
-		// Глобальный индекс в общем списке результатов
 		globalIdx := startIdx + i
 		text.WriteString(fmt.Sprintf("%d. *%s*\n", globalIdx+1, displayName))
 		text.WriteString(fmt.Sprintf("   Hash: `%s`\n\n", result.Hash))
 
-		// Создаем кнопку для каждого результата (используем глобальный индекс)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData(
 				fmt.Sprintf("%d. %s", globalIdx+1, truncatePath(displayName, 999)),
@@ -270,5 +272,5 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-	tss.msgSender.SendOrEdit(chatId, messageID, text.String(), &keyboard)
+	_, _ = tss.msgSender.SendOrEdit(chatId, messageID, text.String(), &keyboard)
 }

@@ -8,7 +8,7 @@ import (
 )
 
 func InitBot(token string) (*tgbotapi.BotAPI, error) {
-	fmt.Println(fmt.Sprintf("try init bot '%s'", token))
+	fmt.Printf("try init bot '%s'\n", token)
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err

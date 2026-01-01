@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"cws/config"
-	"cws/database"
 	"cws/logger"
+	"cws/store"
 	"cws/telegram"
 	"log"
 	"os"
@@ -24,11 +24,13 @@ func main() {
 	logger.SetLevelFromString(cfg.LogLevel)
 	logger.Debugf("Логирование инициализировано с уровнем: %s", cfg.LogLevel)
 
-	repo, err := database.NewRepository(cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
+	repo, err := store.NewRepository(cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName)
 	if err != nil {
 		log.Fatalf("err during database initialization: %s", err)
 	}
-	defer repo.Close()
+	defer func() {
+		_ = repo.Close()
+	}()
 
 	botService, err := telegram.NewBotService(cfg.TelegramToken, cfg.ChatId, repo, cfg)
 	if err != nil {

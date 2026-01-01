@@ -67,6 +67,7 @@ func formatMessage(level LogLevel, format string, args ...interface{}) string {
 	timestamp := time.Now().Format("2006/01/02 15:04:05")
 	levelStr := getLevelString(level)
 	message := fmt.Sprintf(format, args...)
+
 	return fmt.Sprintf("[%s] [%s] %s", timestamp, levelStr, message)
 }
 

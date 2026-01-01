@@ -3,8 +3,8 @@ package qBit
 import (
 	"context"
 	"crypto/tls"
-	"cws/database"
 	"cws/logger"
+	"cws/store"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,7 +16,7 @@ import (
 	"github.com/autobrr/go-qbittorrent"
 )
 
-func CreateClient(ctx context.Context, client *database.Client) (*qbittorrent.Client, error) {
+func CreateClient(ctx context.Context, client *store.Client) (*qbittorrent.Client, error) {
 	var baseURL string
 	if client.SSL {
 		if client.Port == 443 {
@@ -39,6 +39,7 @@ func CreateClient(ctx context.Context, client *database.Client) (*qbittorrent.Cl
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		logger.Error("Ошибка при создании cookie jar: %v", err)
+
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
@@ -57,6 +58,7 @@ func CreateClient(ctx context.Context, client *database.Client) (*qbittorrent.Cl
 	req, err := http.NewRequestWithContext(ctx, "POST", loginURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		logger.Error("Ошибка при создании запроса на логин: %v", err)
+
 		return nil, fmt.Errorf("failed to create login request: %w", err)
 	}
 
@@ -68,24 +70,30 @@ func CreateClient(ctx context.Context, client *database.Client) (*qbittorrent.Cl
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error("Ошибка при выполнении запроса на логин: %v", err)
+
 		return nil, fmt.Errorf("failed to execute login request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error("Ошибка при чтении ответа: %v", err)
+
 		return nil, fmt.Errorf("failed to read login response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		logger.Error("Ошибка аутентификации: статус %d, ответ: %s", resp.StatusCode, string(body))
+
 		return nil, fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	responseText := strings.TrimSpace(string(body))
 	if responseText == "Fails." || strings.Contains(responseText, "Fails") {
 		logger.Error("Неверные учетные данные: %s", responseText)
+
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
@@ -94,6 +102,7 @@ func CreateClient(ctx context.Context, client *database.Client) (*qbittorrent.Cl
 	for _, cookie := range cookies {
 		if cookie.Name == "SID" {
 			sessionCookie = cookie
+
 			break
 		}
 	}
@@ -114,5 +123,6 @@ func CreateClient(ctx context.Context, client *database.Client) (*qbittorrent.Cl
 	qbClient := qbittorrent.NewClient(cfg)
 
 	logger.Debug("Успешное подключение к qBit клиенту: %s (HTTP логин выполнен)", baseURL)
+
 	return qbClient, nil
 }

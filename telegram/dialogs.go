@@ -2,8 +2,9 @@ package telegram
 
 import (
 	"context"
-	"cws/database"
 	"cws/logger"
+	"cws/store"
+	"cws/telegram/messaging"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,14 +13,14 @@ import (
 )
 
 type DialogHandler struct {
-	repo       *database.Repository
-	msgSender  *MessageSender
+	repo       *store.Repository
+	msgSender  messaging.MessageSender
 	stateMgr   *StateManager
 	clientHdlr *ClientHandler
 	cmdHdlr    *CommandHandler
 }
 
-func NewDialogHandler(repo *database.Repository, msgSender *MessageSender, stateMgr *StateManager, clientHdlr *ClientHandler) *DialogHandler {
+func NewDialogHandler(repo *store.Repository, msgSender messaging.MessageSender, stateMgr *StateManager, clientHdlr *ClientHandler) *DialogHandler {
 	return &DialogHandler{
 		repo:       repo,
 		msgSender:  msgSender,
@@ -44,6 +45,7 @@ func (dh *DialogHandler) StartAddClientDialog(chatId int64) {
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -55,12 +57,14 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 	state, exists := dh.stateMgr.GetUserState(chatId)
 	if !exists {
 		logger.Debug("Пользователь %d отправил сообщение, но не в процессе диалога", chatId)
+
 		return
 	}
 
 	text := message.Text
 	if text == "" {
 		logger.Debug("Пользователь %d отправил пустое сообщение", chatId)
+
 		return
 	}
 
@@ -100,8 +104,7 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 	default:
 		logger.Warn("Неизвестное состояние для пользователя %d: %s, текст: %s", chatId, state, text)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неизвестное состояние. Начните операцию заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неизвестное состояние. Начните операцию заново.", nil)
 	}
 }
 
@@ -113,6 +116,7 @@ func (dh *DialogHandler) handleAddClientName(chatId int64, text, separator strin
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -124,8 +128,8 @@ func (dh *DialogHandler) handleAddClientHost(chatId int64, text, state, separato
 	if len(parts) < 2 {
 		logger.Warn("Неверный формат состояния add_client_host для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните добавление заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните добавление заново.", nil)
+
 		return
 	}
 	clientName := parts[1]
@@ -137,12 +141,11 @@ func (dh *DialogHandler) handleAddClientHost(chatId int64, text, state, separato
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
-		msg := tgbotapi.NewMessage(chatId, messageText)
-		msg.ParseMode = "markdown"
-		sendErr := dh.msgSender.Send(msg)
+		_, sendErr := dh.msgSender.SendOrEdit(chatId, 0, messageText, nil)
 		if sendErr != nil {
 			logger.Error("Не удалось отправить новое сообщение пользователю %d: %v", chatId, sendErr)
 		}
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -155,8 +158,8 @@ func (dh *DialogHandler) handleAddClientPort(chatId int64, text, state, separato
 	if len(parts) < 3 {
 		logger.Warn("Неверный формат состояния add_client_port для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните добавление заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните добавление заново.", nil)
+
 		return
 	}
 	clientName := parts[1]
@@ -165,7 +168,8 @@ func (dh *DialogHandler) handleAddClientPort(chatId int64, text, state, separato
 	if err != nil {
 		messageText := "⚠️ Ошибка: порт должен быть числом. Попробуйте снова:"
 		messageID := dh.stateMgr.GetDialogMessage(chatId)
-		dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
+		_, _ = dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
+
 		return
 	}
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("add_client_username%s%s%s%s%s%d", separator, clientName, separator, host, separator, port))
@@ -174,6 +178,7 @@ func (dh *DialogHandler) handleAddClientPort(chatId int64, text, state, separato
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -185,8 +190,8 @@ func (dh *DialogHandler) handleAddClientUsername(chatId int64, text, state, sepa
 	if len(parts) < 4 {
 		logger.Warn("Неверный формат состояния add_client_username для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните добавление заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните добавление заново.", nil)
+
 		return
 	}
 	clientName := parts[1]
@@ -199,6 +204,7 @@ func (dh *DialogHandler) handleAddClientUsername(chatId int64, text, state, sepa
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -210,8 +216,8 @@ func (dh *DialogHandler) handleAddClientPassword(chatId int64, text, state, sepa
 	if len(parts) < 5 {
 		logger.Warn("Неверный формат состояния add_client_password для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните добавление заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните добавление заново.", nil)
+
 		return
 	}
 	clientName := parts[1]
@@ -231,6 +237,7 @@ func (dh *DialogHandler) handleAddClientPassword(chatId int64, text, state, sepa
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -243,8 +250,8 @@ func (dh *DialogHandler) FinishAddClient(chatId int64, ssl bool) {
 	if !exists || !strings.HasPrefix(state, "add_client_ssl") {
 		logger.Warn("Состояние не найдено или неверный префикс для пользователя %d: exists=%v, state=%s", chatId, exists, state)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: сессия истекла. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: сессия истекла. Начните заново.", nil)
+
 		return
 	}
 
@@ -253,8 +260,8 @@ func (dh *DialogHandler) FinishAddClient(chatId int64, ssl bool) {
 	if len(parts) < 6 {
 		logger.Warn("Неверный формат состояния add_client_ssl для пользователя %d: %s (частей: %d, ожидается 6)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверные данные. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверные данные. Начните заново.", nil)
+
 		return
 	}
 
@@ -264,15 +271,15 @@ func (dh *DialogHandler) FinishAddClient(chatId int64, ssl bool) {
 	port, err := strconv.ParseInt(portStr, 10, 32)
 	if err != nil {
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный порт. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный порт. Начните заново.", nil)
+
 		return
 	}
 	username := parts[4]
 	password := parts[5]
 
 	ctx := context.Background()
-	client := &database.Client{
+	client := &store.Client{
 		UserID:   chatId,
 		Name:     clientName,
 		Host:     host,
@@ -285,9 +292,9 @@ func (dh *DialogHandler) FinishAddClient(chatId int64, ssl bool) {
 	createdClient, err := dh.repo.CreateClient(ctx, client)
 	if err != nil {
 		logger.Error("Ошибка при создании клиента для пользователя %d: %v", chatId, err)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка при создании клиента. Попробуйте снова.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка при создании клиента. Попробуйте снова.", nil)
 		dh.stateMgr.DeleteUserState(chatId)
+
 		return
 	}
 
@@ -312,15 +319,15 @@ func (dh *DialogHandler) StartEditClientDialog(chatId int64, clientID int64) {
 	client, err := dh.repo.GetClientByID(ctx, clientID, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиента %d для редактирования пользователем %d: %v", clientID, chatId, err)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка при получении данных клиента")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении данных клиента", nil)
+
 		return
 	}
 
 	if client == nil {
 		logger.Warn("Пользователь %d попытался редактировать несуществующий клиент %d", chatId, clientID)
-		msg := tgbotapi.NewMessage(chatId, "Клиент не найден или у вас нет доступа")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Клиент не найден или у вас нет доступа", nil)
+
 		return
 	}
 
@@ -336,6 +343,7 @@ func (dh *DialogHandler) StartEditClientDialog(chatId int64, clientID int64) {
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -346,8 +354,8 @@ func (dh *DialogHandler) handleEditClientName(chatId int64, text, state, separat
 	if len(parts) < 3 {
 		logger.Warn("Неверный формат состояния edit_client_name для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните редактирование заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните редактирование заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[1]
@@ -358,6 +366,7 @@ func (dh *DialogHandler) handleEditClientName(chatId int64, text, state, separat
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -368,8 +377,8 @@ func (dh *DialogHandler) handleEditClientHost(chatId int64, text, state, separat
 	if len(parts) < 3 {
 		logger.Warn("Неверный формат состояния edit_client_host для пользователя %d: %s", chatId, state)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните редактирование заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните редактирование заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[1]
@@ -381,6 +390,7 @@ func (dh *DialogHandler) handleEditClientHost(chatId int64, text, state, separat
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -393,8 +403,8 @@ func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separat
 	if len(parts) < 4 {
 		logger.Warn("Неверный формат состояния edit_client_port для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните редактирование заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните редактирование заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[1]
@@ -405,7 +415,8 @@ func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separat
 		logger.Warn("Пользователь %d ввел неверный порт: %s", chatId, text)
 		messageText := "⚠️ Ошибка: порт должен быть числом. Попробуйте снова:"
 		messageID := dh.stateMgr.GetDialogMessage(chatId)
-		dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
+		_, _ = dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
+
 		return
 	}
 	logger.Debugf("Пользователь %d ввел port: %d", chatId, port)
@@ -415,6 +426,7 @@ func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separat
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -427,8 +439,8 @@ func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, sep
 	if len(parts) < 5 {
 		logger.Warn("Неверный формат состояния edit_client_username для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните редактирование заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните редактирование заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[1]
@@ -443,6 +455,7 @@ func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, sep
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -455,8 +468,8 @@ func (dh *DialogHandler) handleEditClientPassword(chatId int64, text, state, sep
 	if len(parts) < 6 {
 		logger.Warn("Неверный формат состояния edit_client_password для пользователя %d: %s (частей: %d)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните редактирование заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните редактирование заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[1]
@@ -478,6 +491,7 @@ func (dh *DialogHandler) handleEditClientPassword(chatId int64, text, state, sep
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
@@ -490,8 +504,8 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	if !exists || !strings.HasPrefix(state, "edit_client_ssl") {
 		logger.Warn("Состояние не найдено или неверный префикс для пользователя %d: exists=%v, state=%s", chatId, exists, state)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: сессия истекла. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: сессия истекла. Начните заново.", nil)
+
 		return
 	}
 
@@ -500,8 +514,8 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	if len(parts) < 7 {
 		logger.Warn("Неверный формат состояния edit_client_ssl для пользователя %d: %s (частей: %d, ожидается 7)", chatId, state, len(parts))
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверные данные. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверные данные. Начните заново.", nil)
+
 		return
 	}
 
@@ -509,8 +523,8 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента. Начните заново.", nil)
+
 		return
 	}
 
@@ -520,15 +534,15 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	port, err := strconv.ParseInt(portStr, 10, 32)
 	if err != nil {
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный порт. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный порт. Начните заново.", nil)
+
 		return
 	}
 	username := parts[5]
 	password := parts[6]
 
 	ctx := context.Background()
-	client := &database.Client{
+	client := &store.Client{
 		ID:       clientID,
 		UserID:   chatId,
 		Name:     clientName,
@@ -542,9 +556,9 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	err = dh.repo.UpdateClient(ctx, client, chatId)
 	if err != nil {
 		logger.Error("Ошибка при обновлении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка при обновлении клиента. Попробуйте снова.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка при обновлении клиента. Попробуйте снова.", nil)
 		dh.stateMgr.DeleteUserState(chatId)
+
 		return
 	}
 
@@ -576,8 +590,8 @@ func (dh *DialogHandler) handleAddTorrentCustomPath(chatId int64, text, state st
 	if len(parts) < 5 {
 		logger.Warn("Неверный формат состояния add_torrent_custom_path для пользователя %d: %s", chatId, state)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[4]
@@ -585,8 +599,8 @@ func (dh *DialogHandler) handleAddTorrentCustomPath(chatId int64, text, state st
 	if err != nil {
 		logger.Error("Ошибка при парсинге ID клиента: %v", err)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента.", nil)
+
 		return
 	}
 
@@ -594,8 +608,8 @@ func (dh *DialogHandler) handleAddTorrentCustomPath(chatId int64, text, state st
 	if !exists || cache == nil || cache.ClientID != clientID {
 		logger.Warn("Кэш торрент файла не найден для пользователя %d", chatId)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "❌ Ошибка: данные торрента не найдены. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные торрента не найдены. Начните заново.", nil)
+
 		return
 	}
 
@@ -613,8 +627,8 @@ func (dh *DialogHandler) handleMonitorTorrentHash(chatId int64, text, state stri
 	if len(parts) < 4 {
 		logger.Warn("Неверный формат состояния monitor_torrent_hash для пользователя %d: %s", chatId, state)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверное состояние. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное состояние. Начните заново.", nil)
+
 		return
 	}
 	clientIDStr := parts[3]
@@ -622,22 +636,22 @@ func (dh *DialogHandler) handleMonitorTorrentHash(chatId int64, text, state stri
 	if err != nil {
 		logger.Warn("Неверный ID клиента в состоянии monitor_torrent_hash для пользователя %d: %s", chatId, clientIDStr)
 		dh.stateMgr.DeleteUserState(chatId)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка: неверный ID клиента. Начните заново.")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента. Начните заново.", nil)
+
 		return
 	}
 
 	hash := strings.TrimSpace(strings.ToUpper(text))
 
 	if hash == "" {
-		msg := tgbotapi.NewMessage(chatId, "❌ Хеш не может быть пустым. Введите хеш торрента:")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Хеш не может быть пустым. Введите хеш торрента:", nil)
+
 		return
 	}
 
 	if len(hash) != 40 {
-		msg := tgbotapi.NewMessage(chatId, "❌ Хеш должен содержать 40 символов. Введите правильный хеш:")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Хеш должен содержать 40 символов. Введите правильный хеш:", nil)
+
 		return
 	}
 
@@ -650,8 +664,8 @@ func (dh *DialogHandler) handleMonitorTorrentHash(chatId int64, text, state stri
 func (dh *DialogHandler) handleTorrentSearchQuery(chatId int64, query string) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		msg := tgbotapi.NewMessage(chatId, "❌ Поисковый запрос не может быть пустым. Введите хеш или название торрента:")
-		dh.msgSender.Send(msg)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Поисковый запрос не может быть пустым. Введите хеш или название торрента:", nil)
+
 		return
 	}
 

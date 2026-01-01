@@ -9,7 +9,7 @@ import (
 type AutoChecker struct {
 	clientHdlr *ClientHandler
 	interval   time.Duration
-	lastCheck  map[int64]time.Time // Время последней проверки для каждого пользователя
+	lastCheck  map[int64]time.Time
 }
 
 func NewAutoChecker(clientHdlr *ClientHandler, intervalSeconds int) *AutoChecker {
@@ -32,6 +32,7 @@ func (ac *AutoChecker) Start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			logger.Info("Автоматическая проверка остановлена")
+
 			return
 		case <-ticker.C:
 			go ac.runCheck(ctx)
@@ -46,11 +47,13 @@ func (ac *AutoChecker) runCheck(ctx context.Context) {
 	userIDs, err := ac.clientHdlr.repo.GetAllUserIDs(ctx)
 	if err != nil {
 		logger.Error("Ошибка при получении списка пользователей: %v", err)
+
 		return
 	}
 
 	if len(userIDs) == 0 {
 		logger.Debug("Нет пользователей для проверки")
+
 		return
 	}
 
@@ -60,6 +63,7 @@ func (ac *AutoChecker) runCheck(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			logger.Info("Автоматическая проверка прервана")
+
 			return
 		default:
 		}
@@ -75,5 +79,6 @@ func (ac *AutoChecker) runCheck(ctx context.Context) {
 
 func (ac *AutoChecker) GetLastCheckTime(userID int64) (time.Time, bool) {
 	t, exists := ac.lastCheck[userID]
+
 	return t, exists
 }

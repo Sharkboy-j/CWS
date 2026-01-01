@@ -26,10 +26,12 @@ func AddTorrentFile(ctx context.Context, client *qbittorrent.Client, torrentFile
 	err := client.AddTorrentFromMemoryCtx(ctx, torrentFile, options)
 	if err != nil {
 		logger.Error("Ошибка при добавлении торрент файла: %v", err)
+
 		return fmt.Errorf("failed to add torrent file: %w", err)
 	}
 
 	logger.Info("Торрент файл успешно добавлен в qBittorrent")
+
 	return nil
 }
 
@@ -40,6 +42,7 @@ func GetCategories(ctx context.Context, client *qbittorrent.Client) ([]string, e
 	categories, err := client.GetCategoriesCtx(ctx)
 	if err != nil {
 		logger.Error("Ошибка при получении категорий: %v", err)
+
 		return nil, fmt.Errorf("failed to get categories: %w", err)
 	}
 
@@ -49,6 +52,7 @@ func GetCategories(ctx context.Context, client *qbittorrent.Client) ([]string, e
 	}
 
 	logger.Debug("Получено %d категорий", len(categoryList))
+
 	return categoryList, nil
 }
 
@@ -59,10 +63,12 @@ func GetDefaultSavePath(ctx context.Context, client *qbittorrent.Client) (string
 	prefs, err := client.GetAppPreferencesCtx(ctx)
 	if err != nil {
 		logger.Error("Ошибка при получении настроек: %v", err)
+
 		return "", fmt.Errorf("failed to get preferences: %w", err)
 	}
 
 	if prefs.SavePath != "" {
+
 		return prefs.SavePath, nil
 	}
 
@@ -76,6 +82,7 @@ func GetTorrentSavePaths(ctx context.Context, client *qbittorrent.Client) ([]str
 	torrents, err := client.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
 	if err != nil {
 		logger.Error("Ошибка при получении торрентов: %v", err)
+
 		return nil, fmt.Errorf("failed to get torrents: %w", err)
 	}
 
@@ -92,6 +99,7 @@ func GetTorrentSavePaths(ctx context.Context, client *qbittorrent.Client) ([]str
 	}
 
 	logger.Debug("Найдено %d уникальных путей сохранения", len(paths))
+
 	return paths, nil
 }
 
@@ -102,9 +110,11 @@ func DeleteTorrent(ctx context.Context, client *qbittorrent.Client, hash string,
 	err := client.DeleteTorrentsCtx(ctx, []string{hash}, deleteFiles)
 	if err != nil {
 		logger.Error("Ошибка при удалении торрента: %v", err)
+
 		return fmt.Errorf("failed to delete torrent: %w", err)
 	}
 
 	logger.Info("Торрент успешно удален из qBittorrent")
+
 	return nil
 }

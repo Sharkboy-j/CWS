@@ -21,10 +21,7 @@ func makeRequest(cfg *config.Config, urlPart string) ([]byte, error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
+		_ = Body.Close()
 	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)

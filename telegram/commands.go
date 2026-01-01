@@ -2,8 +2,9 @@ package telegram
 
 import (
 	"context"
-	"cws/database"
 	"cws/logger"
+	"cws/store"
+	"cws/telegram/messaging"
 	"fmt"
 	"strings"
 
@@ -12,12 +13,12 @@ import (
 
 type CommandHandler struct {
 	bot       *tgbotapi.BotAPI
-	repo      *database.Repository
+	repo      *store.Repository
 	stateMgr  *StateManager
-	msgSender *MessageSender
+	msgSender messaging.MessageSender
 }
 
-func NewCommandHandler(bot *tgbotapi.BotAPI, repo *database.Repository, stateMgr *StateManager, msgSender *MessageSender) *CommandHandler {
+func NewCommandHandler(bot *tgbotapi.BotAPI, repo *store.Repository, stateMgr *StateManager, msgSender messaging.MessageSender) *CommandHandler {
 	return &CommandHandler{
 		bot:       bot,
 		repo:      repo,
@@ -39,8 +40,7 @@ func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
 		ch.HandleClientsCommand(chatId)
 	default:
 		logger.Warn("Пользователь %d выполнил неизвестную команду: /%s", chatId, command)
-		msg := tgbotapi.NewMessage(chatId, "Неизвестная команда")
-		ch.msgSender.Send(msg)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Неизвестная команда", nil)
 	}
 }
 
@@ -76,6 +76,7 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -87,8 +88,8 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка при получении списка клиентов")
-		ch.msgSender.Send(msg)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении списка клиентов", nil)
+
 		return
 	}
 	logger.Debugf("Пользователь %d имеет %d клиентов для проверки", chatId, len(clients))
@@ -97,20 +98,10 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 
 	if len(clients) == 0 {
 		text := "📋 *Проверка активных торрентов*\n\nКлиенты не найдены. Добавьте клиента для проверки."
-		keyboard := tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
-			),
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
-			),
-		)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-		if err != nil {
-			logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+		if err := sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text); err != nil {
 			return
 		}
-		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+
 		return
 	}
 	var text strings.Builder
@@ -142,6 +133,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text.String(), &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -153,8 +145,8 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка при получении списка клиентов")
-		ch.msgSender.Send(msg)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении списка клиентов", nil)
+
 		return
 	}
 	logger.Debugf("Пользователь %d имеет %d клиентов", chatId, len(clients))
@@ -163,20 +155,10 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 
 	if len(clients) == 0 {
 		text := "📋 *Клиенты qBittorrent*\n\nКлиенты не найдены. Добавьте первого клиента."
-		keyboard := tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
-			),
-			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
-			),
-		)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-		if err != nil {
-			logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+		if err = sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text); err != nil {
 			return
 		}
-		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+
 		return
 	}
 	var text strings.Builder
@@ -211,6 +193,7 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text.String(), &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
