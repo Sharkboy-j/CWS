@@ -11,7 +11,7 @@ env:
 
 jobs:
   lint:
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64]
     steps:
     - uses: actions/checkout@v3
       with:
@@ -26,13 +26,12 @@ jobs:
       uses: golangci/golangci-lint-action@v3
       with:
         version: latest
-        args: --cache
 
     - name: Run linter
       run: golangci-lint run
 
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64]
     needs: lint
     steps:
     - uses: actions/checkout@v3
@@ -47,7 +46,6 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-
   docker-build-push:
     needs: build
     permissions:
@@ -58,9 +56,9 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            runner: self-hosted
+            runner: [self-hosted, amd64]
           - platform: linux/arm64
-            runner: self-hosted
+            runner: [self-hosted, ARM64]
     runs-on: ${{ matrix.runner }}
     steps:
     - uses: actions/checkout@v3
@@ -103,7 +101,7 @@ jobs:
         cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
   docker-manifest:
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64]
     needs: docker-build-push
     permissions:
       contents: read
@@ -140,7 +138,7 @@ jobs:
           ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-arm64
 
   create-release:
-    runs-on: self-hosted
+    runs-on: [self-hosted, amd64]
     needs: docker-manifest
     permissions:
       contents: write
@@ -163,9 +161,9 @@ jobs:
         name: Release ${{ steps.tag.outputs.version }}
         body: |
           ## Release ${{ steps.tag.outputs.version }}
-          
+
           Docker image: `${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}`
-          
+
           ### Pull the image
           ```bash
           docker pull ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}
