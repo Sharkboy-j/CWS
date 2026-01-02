@@ -17,8 +17,8 @@ jobs:
       with:
         ref: ${{ github.ref }}
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - name: Set up Go with caching
+      uses: ./.github/actions/setup-go-cached
       with:
         go-version: '1.23.1'
 
@@ -26,6 +26,7 @@ jobs:
       uses: golangci/golangci-lint-action@v3
       with:
         version: latest
+        args: --cache
 
     - name: Run linter
       run: golangci-lint run
@@ -38,8 +39,8 @@ jobs:
       with:
         ref: ${{ github.ref }}
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - name: Set up Go with caching
+      uses: ./.github/actions/setup-go-cached
       with:
         go-version: '1.23.1'
 
@@ -48,11 +49,19 @@ jobs:
 
 
   docker-build-push:
-    runs-on: self-hosted
     needs: build
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: self-hosted
+          - platform: linux/arm64
+            runner: self-hosted
+    runs-on: ${{ matrix.runner }}
     steps:
     - uses: actions/checkout@v3
       with:
@@ -75,21 +84,64 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Extract platform architecture
+      id: platform
+      run: |
+        ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+        echo "arch=$ARCH" >> $GITHUB_OUTPUT
+        echo "Architecture: $ARCH"
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
-        platforms: linux/amd64,linux/arm64
+        platforms: ${{ matrix.platform }}
         push: true
         tags: |
-          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:latest
-          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:${{ steps.tag.outputs.version }}-${{ steps.platform.outputs.arch }}
+        cache-from: type=gha,scope=${{ matrix.platform }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+  docker-manifest:
+    runs-on: self-hosted
+    needs: docker-build-push
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.ref }}
+
+    - name: Extract version from tag
+      id: tag
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create and push multi-arch manifest
+      run: |
+        VERSION=${{ steps.tag.outputs.version }}
+        docker buildx imagetools create \
+          -t ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:latest \
+          -t ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION \
+          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-amd64 \
+          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-arm64
 
   create-release:
     runs-on: self-hosted
-    needs: docker-build-push
+    needs: docker-manifest
     permissions:
       contents: write
     steps:
