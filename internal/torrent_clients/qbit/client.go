@@ -16,6 +16,13 @@ import (
 	"github.com/autobrr/go-qbittorrent"
 )
 
+type TransferInfo struct {
+	DownloadSpeed int64
+	UploadSpeed   int64
+	DownloadLimit int64
+	UploadLimit   int64
+}
+
 type Service interface {
 	AddTorrentFile(ctx context.Context, torrentFile []byte, savePath string, category string, skipHashCheck bool) error
 	DeleteTorrent(ctx context.Context, hash string, deleteFiles bool) error
@@ -26,10 +33,16 @@ type Service interface {
 	FilterTorrentsByRutrackerComment(ctx context.Context, torrents []qbittorrent.Torrent) ([]qbittorrent.Torrent, error)
 	GetTorrentsCtx(ctx context.Context, options qbittorrent.TorrentFilterOptions) ([]qbittorrent.Torrent, error)
 	GetTorrentPropertiesCtx(ctx context.Context, hash string) (qbittorrent.TorrentProperties, error)
+	PauseAllTorrents(ctx context.Context) error
+	ResumeAllTorrents(ctx context.Context) error
+	SetGlobalSpeedLimits(ctx context.Context, downloadLimit, uploadLimit int64) error
+	GetTransferInfo(ctx context.Context) (*TransferInfo, error)
 }
 
 type service struct {
-	client *qbittorrent.Client
+	client     *qbittorrent.Client
+	baseURL    string
+	httpClient *http.Client
 }
 
 func New(ctx context.Context, client *storage.Client) (Service, error) {
@@ -140,5 +153,9 @@ func New(ctx context.Context, client *storage.Client) (Service, error) {
 
 	logger.Debug("Успешное подключение к qBit клиенту: %s (HTTP логин выполнен)", baseURL)
 
-	return &service{client: qbClient}, nil
+	return &service{
+		client:     qbClient,
+		baseURL:    baseURL,
+		httpClient: httpClient,
+	}, nil
 }

@@ -101,6 +101,8 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 		dh.handleMonitorTorrentHash(chatId, text, state)
 	case state == "search_torrent_query":
 		dh.handleTorrentSearchQuery(chatId, text)
+	case state == "custom_speed_limit":
+		dh.handleCustomSpeedLimit(chatId, text)
 	default:
 		logger.Warn("Неизвестное состояние для пользователя %d: %s, текст: %s", chatId, state, text)
 		dh.stateMgr.DeleteUserState(chatId)
@@ -672,4 +674,31 @@ func (dh *DialogHandler) handleTorrentSearchQuery(chatId int64, query string) {
 	dh.stateMgr.DeleteUserState(chatId)
 
 	dh.clientHdlr.torrentSearchSvc.SearchTorrents(chatId, query)
+}
+
+func (dh *DialogHandler) handleCustomSpeedLimit(chatId int64, speedText string) {
+	speedText = strings.TrimSpace(speedText)
+	if speedText == "" {
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Скорость не может быть пустой. Введите скорость в МБ/с:", nil)
+
+		return
+	}
+
+	speedMB, err := strconv.ParseFloat(speedText, 64)
+	if err != nil {
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Неверный формат скорости. Введите число (например: 2.5):", nil)
+
+		return
+	}
+
+	if speedMB <= 0 {
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Скорость должна быть больше 0. Введите корректное значение:", nil)
+
+		return
+	}
+
+	dh.stateMgr.DeleteUserState(chatId)
+
+	speedBytesPerSec := int64(speedMB * 1024 * 1024)
+	dh.clientHdlr.HandleLimitSpeedBytes(chatId, speedBytesPerSec)
 }

@@ -50,6 +50,20 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		}
 	case data == "check_torrents":
 		ch.clientHdlr.CheckAllClients(chatId)
+	case data == "quick_actions":
+		ch.clientHdlr.ShowQuickActionsMenu(chatId)
+	case data == "quick_action_pause_all":
+		ch.clientHdlr.HandlePauseAllTorrents(chatId)
+	case data == "quick_action_resume_all":
+		ch.clientHdlr.HandleResumeAllTorrents(chatId)
+	case data == "quick_action_limit_speed_menu":
+		ch.clientHdlr.ShowSpeedLimitMenu(chatId)
+	case strings.HasPrefix(data, "quick_action_limit_speed_"):
+		ch.handleSpeedLimitSelection(chatId, data)
+	case data == "quick_action_limit_speed_custom":
+		ch.clientHdlr.StartCustomSpeedLimitDialog(chatId)
+	case data == "quick_action_remove_speed_limits":
+		ch.clientHdlr.HandleRemoveSpeedLimits(chatId)
 	case data == "add_torrent_file":
 		ch.clientHdlr.ShowClientsForTorrentAdd(chatId)
 	case data == "monitor_torrent":
@@ -479,4 +493,19 @@ func (ch *CallbackHandler) handleRecheckClient(chatId int64, data string) {
 	}
 	logger.Debugf("Пользователь %d запросил повторную проверку активных торрентов для клиента %d", chatId, clientID)
 	ch.clientHdlr.CheckClientTorrents(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleSpeedLimitSelection(chatId int64, data string) {
+	speedStr := strings.TrimPrefix(data, "quick_action_limit_speed_")
+	speedMBx100, err := strconv.ParseInt(speedStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверное значение скорости: %s", chatId, speedStr)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное значение скорости", nil)
+
+		return
+	}
+	speedMB := float64(speedMBx100) / 100.0
+	logger.Debugf("Пользователь %d выбрал ограничение скорости: %.2f МБ/с", chatId, speedMB)
+	speedBytesPerSec := int64(speedMB * 1024 * 1024)
+	ch.clientHdlr.HandleLimitSpeedBytes(chatId, speedBytesPerSec)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"cws/config"
 	"cws/internal/bot/monitoring"
+	"cws/internal/bot/quick_actions"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -27,6 +28,7 @@ type ClientHandler struct {
 	torrentMonitorCache  map[int64]*TorrentMonitorCache
 	torrentMonitorSvc    monitoring.TorrentMonitorService
 	torrentSearchSvc     *TorrentSearchService
+	quickActionsHandler  *quick_actions.Handler
 }
 
 type TorrentMonitorCache struct {
@@ -59,6 +61,8 @@ type CheckResultsCache struct {
 }
 
 func NewClientHandler(repo *storage.Repository, msgSender messaging.MessageSender, stateMgr *StateManager, cfg *config.Config) *ClientHandler {
+	quickActionsHandler := quick_actions.NewHandler(repo, msgSender, &stateManagerAdapter{stateMgr: stateMgr})
+
 	return &ClientHandler{
 		repo:                 repo,
 		msgSender:            msgSender,
@@ -70,11 +74,44 @@ func NewClientHandler(repo *storage.Repository, msgSender messaging.MessageSende
 		torrentMonitorCache:  make(map[int64]*TorrentMonitorCache),
 		torrentMonitorSvc:    monitoring.NewTorrentMonitorService(repo, msgSender, stateMgr.GetMenuMessage, stateMgr.SetMenuMessage),
 		torrentSearchSvc:     NewTorrentSearchService(repo, msgSender, stateMgr),
+		quickActionsHandler:  quickActionsHandler,
 	}
+}
+
+type stateManagerAdapter struct {
+	stateMgr *StateManager
+}
+
+func (s *stateManagerAdapter) GetMenuMessage(chatId int64) int {
+	return s.stateMgr.GetMenuMessage(chatId)
+}
+
+func (s *stateManagerAdapter) SetMenuMessage(chatId int64, messageID int) {
+	s.stateMgr.SetMenuMessage(chatId, messageID)
 }
 
 func (ch *ClientHandler) SetCommandHandler(cmdHdlr *CommandHandler) {
 	ch.cmdHdlr = cmdHdlr
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.SetCommandHandler(&commandHandlerAdapter{cmdHdlr: cmdHdlr})
+		ch.quickActionsHandler.SetStateSetter(&stateSetterAdapter{stateMgr: ch.stateMgr})
+	}
+}
+
+type commandHandlerAdapter struct {
+	cmdHdlr *CommandHandler
+}
+
+func (c *commandHandlerAdapter) ShowMainMenu(chatId int64) {
+	c.cmdHdlr.ShowMainMenu(chatId)
+}
+
+type stateSetterAdapter struct {
+	stateMgr *StateManager
+}
+
+func (s *stateSetterAdapter) SetUserState(chatId int64, state string) {
+	s.stateMgr.SetUserState(chatId, state)
 }
 
 func (ch *ClientHandler) getClientByIDWithErrorHandling(chatId int64, clientID int64) (*storage.Client, bool) {
@@ -905,4 +942,46 @@ func truncatePath(path string, maxLen int) string {
 	}
 
 	return "..." + path[len(path)-maxLen+3:]
+}
+
+func (ch *ClientHandler) ShowQuickActionsMenu(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.ShowQuickActionsMenu(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandlePauseAllTorrents(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandlePauseAllTorrents(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandleResumeAllTorrents(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandleResumeAllTorrents(chatId)
+	}
+}
+
+func (ch *ClientHandler) ShowSpeedLimitMenu(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.ShowSpeedLimitMenu(chatId)
+	}
+}
+
+func (ch *ClientHandler) StartCustomSpeedLimitDialog(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.StartCustomSpeedLimitDialog(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandleLimitSpeedBytes(chatId int64, limitBytesPerSec int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandleLimitSpeedBytes(chatId, limitBytesPerSec)
+	}
+}
+
+func (ch *ClientHandler) HandleRemoveSpeedLimits(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandleRemoveSpeedLimits(chatId)
+	}
 }
