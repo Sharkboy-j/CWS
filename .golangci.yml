@@ -31,7 +31,7 @@ linters:
       block-size: 1
       # Minimum number of statements in a function to require newline before return
       # Set to 1 to require newline only if there's at least one statement before return
-      min-lines: 1
+      # min-lines: 1
     errorlint:
       # Enforce errors.Is / errors.As instead of direct comparisons.
       errorf: false

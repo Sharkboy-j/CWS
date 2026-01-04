@@ -10,6 +10,9 @@ PLATFORMS ?= linux/amd64,linux/arm64
 API_IMAGE ?= $(REGISTRY)/$(DOCKERHUB_USER)/cws
 BUILDER ?= cws-builder
 
+# golangci-lint version used by CI and local installs
+GOLANGCI_LINT_VERSION ?= v2.7.2
+
 API_TAGS := -t $(API_IMAGE):latest
 ifneq ($(VERSION),)
   API_TAGS := $(API_TAGS) -t $(API_IMAGE):$(VERSION)
@@ -29,6 +32,16 @@ lint-install-mac:
 	brew upgrade golangci-lint	
 	@echo "golangci-lint installed successfully"
 
+# Cross-platform installer that installs the fixed version defined in GOLANGCI_LINT_VERSION.
+# On macOS prefers brew, otherwise uses the official install script and places the binary to /usr/local/bin.
+lint-install:
+	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
+	@if command -v brew >/dev/null 2>&1; then \
+	  brew install golangci-lint || brew upgrade golangci-lint; \
+	else \
+	  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin $(GOLANGCI_LINT_VERSION); \
+	fi
+	@echo "golangci-lint installation finished"
 # Build and push multi-arch image
 .PHONY: docker-build docker-push docker-build-push
 
