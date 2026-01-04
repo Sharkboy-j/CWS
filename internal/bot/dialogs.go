@@ -141,7 +141,6 @@ func (dh *DialogHandler) handleEditRecommendedTorrentsInput(chatId int64, text s
 		return
 	}
 
-	// Clear dialog state and message, then show variables menu.
 	dialogMessageID := dh.stateMgr.GetDialogMessage(chatId)
 	if dialogMessageID > 0 {
 		dh.msgSender.DeleteMessage(chatId, dialogMessageID)
@@ -150,7 +149,7 @@ func (dh *DialogHandler) handleEditRecommendedTorrentsInput(chatId int64, text s
 	dh.stateMgr.DeleteUserState(chatId)
 
 	if dh.cmdHdlr != nil {
-		dh.cmdHdlr.ShowVariablesMenuWithValue(chatId, n)
+		dh.cmdHdlr.ShowVariablesMenu(chatId)
 	}
 }
 func (dh *DialogHandler) handleAddClientName(chatId int64, text, separator string) {
@@ -441,7 +440,6 @@ func (dh *DialogHandler) handleEditClientHost(chatId int64, text, state, separat
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
 }
 
-// handleEditClientPort обрабатывает ввод нового порта клиента
 func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separator string) {
 	logger.Debugf("Пользователь %d ввел port: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 4)
@@ -477,7 +475,6 @@ func (dh *DialogHandler) handleEditClientPort(chatId int64, text, state, separat
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
 }
 
-// handleEditClientUsername обрабатывает ввод нового username клиента
 func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, separator string) {
 	logger.Debugf("Пользователь %d ввел username: %s, состояние: %s", chatId, text, state)
 	parts := strings.SplitN(state, separator, 5)
@@ -506,7 +503,6 @@ func (dh *DialogHandler) handleEditClientUsername(chatId int64, text, state, sep
 	dh.stateMgr.SetDialogMessage(chatId, newMessageID)
 }
 
-// handleEditClientPassword обрабатывает ввод нового password клиента
 func (dh *DialogHandler) handleEditClientPassword(chatId int64, text, state, separator string) {
 	logger.Debugf("Пользователь %d ввел password, состояние: %s", chatId, state)
 	parts := strings.SplitN(state, separator, 6)
@@ -627,7 +623,6 @@ func (dh *DialogHandler) FinishEditClient(chatId int64, ssl bool) {
 	dh.clientHdlr.ShowClientDetails(chatId, clientID)
 }
 
-// handleAddTorrentCustomPath обрабатывает ввод пути сохранения вручную
 func (dh *DialogHandler) handleAddTorrentCustomPath(chatId int64, text, state string) {
 	logger.Debugf("Пользователь %d ввел путь сохранения: %s", chatId, text)
 
@@ -664,7 +659,6 @@ func (dh *DialogHandler) handleAddTorrentCustomPath(chatId int64, text, state st
 	dh.clientHdlr.ShowSkipHashCheckQuestion(chatId, clientID, text)
 }
 
-// handleMonitorTorrentHash обрабатывает ввод хеша торрента для мониторинга
 func (dh *DialogHandler) handleMonitorTorrentHash(chatId int64, text, state string) {
 	logger.Debugf("Пользователь %d ввел хеш торрента для мониторинга: %s", chatId, text)
 

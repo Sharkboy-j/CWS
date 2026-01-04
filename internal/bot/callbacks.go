@@ -34,6 +34,28 @@ func (ch *CallbackHandler) SetCommandHandler(cmdHdlr *CommandHandler) {
 	ch.cmdHdlr = cmdHdlr
 }
 
+// parseClientIDAndGetTorrentCache parses client ID and returns the torrent file cache for the chat.
+// Returns (clientID, cache, true) on success, otherwise sends an error message and returns false.
+func (ch *CallbackHandler) parseClientIDAndGetTorrentCache(chatId int64, clientIDStr string) (int64, *TorrentFileCache, bool) {
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+
+		return 0, nil, false
+	}
+
+	cache, exists := ch.clientHdlr.torrentFilesCache[chatId]
+	if !exists || cache == nil || cache.ExistingHash == "" {
+		logger.Warn("Кэш торрент файла не найден или hash отсутствует для пользователя %d", chatId)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные торрента не найдены. Начните заново.", nil)
+
+		return clientID, nil, false
+	}
+
+	return clientID, cache, true
+}
+
 func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	chatId := query.Message.Chat.ID
 	data := query.Data
@@ -48,11 +70,8 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
 		ch.clientHdlr.ShowClientsForTorrentMonitor(chatId)
 	case data == "back_to_torrents":
-		// stop active monitoring first
 		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
 
-		// try to restore client ID from user state if available and show its torrents,
-		// otherwise show clients list
 		if state, ok := ch.stateMgr.GetUserState(chatId); ok && strings.HasPrefix(state, "monitor_torrent_hash_") {
 			clientIDStr := strings.TrimPrefix(state, "monitor_torrent_hash_")
 			if clientID, err := strconv.ParseInt(clientIDStr, 10, 64); err == nil {
@@ -96,8 +115,21 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		if ch.cmdHdlr != nil {
 			ch.cmdHdlr.ShowVariablesMenu(chatId)
 		}
+	case data == "edit_timezone":
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.ShowTimezoneMenu(chatId, 0)
+		}
+	case strings.HasPrefix(data, "edit_timezone_page_"):
+		if ch.cmdHdlr != nil {
+			pageStr := strings.TrimPrefix(data, "edit_timezone_page_")
+			page, err := strconv.Atoi(pageStr)
+			if err != nil {
+				logger.Warn("Пользователь %d отправил неверный номер страницы таймзон: %s", chatId, pageStr)
+				return
+			}
+			ch.cmdHdlr.ShowTimezoneMenu(chatId, page)
+		}
 	case data == "edit_recommended_torrents_input":
-		// Start dialog for custom input
 		ch.stateMgr.SetUserState(chatId, "edit_recommended_torrents_input")
 		text := "✏️ Введите число рекомендуемых торрентов для отображения на странице выбора мониторинга (например: 3):"
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -231,6 +263,8 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		}
 	case strings.HasPrefix(data, "set_recommended_torrents_"):
 		ch.handleSetRecommendedTorrents(chatId, data)
+	case strings.HasPrefix(data, "set_timezone_"):
+		ch.handleSetTimezone(chatId, data)
 	}
 }
 
@@ -248,7 +282,6 @@ func (ch *CallbackHandler) handleMonitorTorrentClient(chatId int64, data string)
 }
 
 func (ch *CallbackHandler) handleMonitorTorrentHashButton(chatId int64, data string) {
-	// Формат: monitor_torrent_hash_btn_{clientID}_{index}
 	prefix := "monitor_torrent_hash_btn_"
 	if !strings.HasPrefix(data, prefix) {
 		logger.Warn("Пользователь %d отправил неверный формат выбора хеша: %s", chatId, data)
@@ -319,7 +352,6 @@ func (ch *CallbackHandler) handleMonitorTorrentManual(chatId int64, data string)
 }
 
 func (ch *CallbackHandler) handleMonitorPause(chatId int64, data string) {
-	// Format: monitor_pause_{clientID}_{hash}
 	prefix := "monitor_pause_"
 	rest := strings.TrimPrefix(data, prefix)
 	parts := strings.SplitN(rest, "_", 2)
@@ -350,11 +382,9 @@ func (ch *CallbackHandler) handleMonitorPause(chatId int64, data string) {
 
 		return
 	}
-	// No UI confirmation — monitoring will refresh the view itself.
 }
 
 func (ch *CallbackHandler) handleMonitorResume(chatId int64, data string) {
-	// Format: monitor_resume_{clientID}_{hash}
 	prefix := "monitor_resume_"
 	rest := strings.TrimPrefix(data, prefix)
 	parts := strings.SplitN(rest, "_", 2)
@@ -385,11 +415,9 @@ func (ch *CallbackHandler) handleMonitorResume(chatId int64, data string) {
 
 		return
 	}
-	// No UI confirmation — monitoring will refresh the view itself.
 }
 
 func (ch *CallbackHandler) handleSetRecommendedTorrents(chatId int64, data string) {
-	// Format: set_recommended_torrents_{n}
 	prefix := "set_recommended_torrents_"
 	if !strings.HasPrefix(data, prefix) {
 		return
@@ -409,7 +437,26 @@ func (ch *CallbackHandler) handleSetRecommendedTorrents(chatId int64, data strin
 		return
 	}
 
-	// After saving, show variables menu again to reflect new value.
+	if ch.cmdHdlr != nil {
+		ch.cmdHdlr.ShowVariablesMenu(chatId)
+	}
+}
+
+func (ch *CallbackHandler) handleSetTimezone(chatId int64, data string) {
+	prefix := "set_timezone_"
+	if !strings.HasPrefix(data, prefix) {
+		return
+	}
+	repr := strings.TrimPrefix(data, prefix)
+	tz := strings.ReplaceAll(repr, "|", "/")
+
+	ctx := context.Background()
+	if err := ch.clientHdlr.repo.SetUserTimezone(ctx, chatId, tz); err != nil {
+		logger.Error("Ошибка при сохранении часового пояса для пользователя %d: %v", chatId, err)
+
+		return
+	}
+
 	if ch.cmdHdlr != nil {
 		ch.cmdHdlr.ShowVariablesMenu(chatId)
 	}
@@ -521,18 +568,8 @@ func (ch *CallbackHandler) handleSkipHashCheck(chatId int64, data string) {
 
 func (ch *CallbackHandler) handleDeleteExistingTorrent(chatId int64, data string) {
 	clientIDStr := strings.TrimPrefix(data, "delete_existing_torrent_")
-	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
-	if err != nil {
-		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-
-		return
-	}
-
-	cache, exists := ch.clientHdlr.torrentFilesCache[chatId]
-	if !exists || cache == nil || cache.ExistingHash == "" {
-		logger.Warn("Кэш торрент файла не найден или hash отсутствует для пользователя %d", chatId)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные торрента не найдены. Начните заново.", nil)
-
+	clientID, cache, ok := ch.parseClientIDAndGetTorrentCache(chatId, clientIDStr)
+	if !ok {
 		return
 	}
 
@@ -571,18 +608,8 @@ func (ch *CallbackHandler) handleConfirmDeleteTorrent(chatId int64, data string)
 	clientIDStr := parts[0]
 	deleteFilesStr := parts[1]
 
-	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
-	if err != nil {
-		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-
-		return
-	}
-
-	cache, exists := ch.clientHdlr.torrentFilesCache[chatId]
-	if !exists || cache == nil || cache.ExistingHash == "" {
-		logger.Warn("Кэш торрент файла не найден или hash отсутствует для пользователя %d", chatId)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные торрента не найдены. Начните заново.", nil)
-
+	clientID, cache, ok := ch.parseClientIDAndGetTorrentCache(chatId, clientIDStr)
+	if !ok {
 		return
 	}
 

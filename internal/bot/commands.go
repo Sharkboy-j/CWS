@@ -58,7 +58,6 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 	logger.Debugf("Показ главного меню для пользователя %d", chatId)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
-	// For /start command, always send new message to ensure menu appears after chat clearing
 	if ch.isStartCommand {
 		messageID = 0
 	}
@@ -183,13 +182,82 @@ func (ch *CommandHandler) ShowSettingsMenu(chatId int64) {
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
-// ShowVariablesMenu displays variables; current values are fetched from DB (defaults applied).
+func (ch *CommandHandler) ShowTimezoneMenu(chatId int64, page int) {
+	logger.Debugf("Показ меню часового пояса для пользователя %d", chatId)
+	messageID := ch.stateMgr.GetMenuMessage(chatId)
+
+	text := "🕒 *Часовой пояс*\n\nВыберите часовой пояс или отправьте свою локацию:"
+	timezones := []string{
+		"UTC",
+		"Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Amsterdam", "Europe/Zurich",
+		"Europe/Madrid", "Europe/Rome", "Europe/Prague", "Europe/Brussels", "Europe/Warsaw",
+		"Europe/Stockholm", "Europe/Oslo", "Europe/Helsinki", "Europe/Athens", "Europe/Istanbul",
+		"Europe/Minsk", "Europe/Moscow", "Europe/Kiev", "Europe/Budapest", "Europe/Bucharest",
+		"Asia/Tokyo", "Asia/Seoul", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Singapore",
+		"Asia/Bangkok", "Asia/Kuala_Lumpur", "Asia/Dubai", "Asia/Jerusalem", "Asia/Karachi",
+		"Asia/Kolkata", "Asia/Dhaka", "Asia/Jakarta", "Asia/Ho_Chi_Minh", "Asia/Manila",
+		"Asia/Yekaterinburg", "Asia/Omsk", "Asia/Novosibirsk", "Asia/Shanghai", "Asia/Taipei",
+		"Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Pacific/Auckland", "Pacific/Fiji",
+		"Pacific/Tongatapu", "Pacific/Kiritimati", "Pacific/Honolulu", "Pacific/Guadalcanal",
+		"America/New_York", "America/Toronto", "America/Montreal", "America/Chicago", "America/Winnipeg",
+		"America/Denver", "America/Edmonton", "America/Los_Angeles", "America/Vancouver",
+		"America/Anchorage", "America/Halifax", "America/St_Johns", "America/Phoenix",
+		"America/Indiana/Indianapolis", "America/Indiana/Knox", "America/Regina", "America/Sao_Paulo",
+		"America/Bogota", "America/Mexico_City", "America/Caracas", "America/La_Paz", "America/Montevideo",
+		"America/Argentina/Buenos_Aires", "America/Guayaquil", "America/Asuncion", "America/Montevideo",
+		"Africa/Cairo", "Africa/Johannesburg", "Africa/Nairobi", "Africa/Casablanca", "Africa/Lagos",
+		"Africa/Accra", "Africa/Algiers", "Africa/Harare",
+		"Atlantic/Reykjavik", "Atlantic/Azores",
+		"Indian/Maldives", "Indian/Mauritius", "Indian/Reunion",
+		"Etc/GMT+12", "Etc/GMT+11", "Etc/GMT+10", "Etc/GMT+9", "Etc/GMT+8", "Etc/GMT+7", "Etc/GMT+6",
+		"Etc/GMT+5", "Etc/GMT+4", "Etc/GMT+3", "Etc/GMT+2", "Etc/GMT+1",
+		"Antarctica/Casey", "Antarctica/Davis", "Antarctica/Mawson",
+	}
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+	pageSize := 20
+	start := page * pageSize
+	if start > len(timezones) {
+		start = 0
+	}
+	end := start + pageSize
+	if end > len(timezones) {
+		end = len(timezones)
+	}
+	for _, tz := range timezones[start:end] {
+		repr := strings.ReplaceAll(tz, "/", "|")
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			ui.Data(tz, fmt.Sprintf("set_timezone_%s", repr)),
+		))
+	}
+	if len(timezones) > pageSize {
+		var nav []tgbotapi.InlineKeyboardButton
+		nav = append(nav, ui.ButtonWithData(ui.NextPage, fmt.Sprintf("edit_timezone_page_%d", page+1)))
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(nav...))
+	}
+
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		ui.ButtonWithData(ui.Cancel, "settings"),
+	))
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		ui.Button(ui.SettingsMenu),
+		ui.Button(ui.MainMenu),
+	))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
+	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if err != nil {
+		logger.Error("Ошибка при отправке/обновлении меню часового пояса для пользователя %d: %v", chatId, err)
+
+		return
+	}
+	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+}
+
 func (ch *CommandHandler) ShowVariablesMenu(chatId int64) {
-	// Show list of editable variables. Actual editing opens when user selects a variable.
 	logger.Debugf("Показ списка переменных для пользователя %d", chatId)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
-	// fetch current value to show next to variable name
 	ctx := context.Background()
 	count, err := ch.repo.GetRecommendedTorrents(ctx, chatId)
 	if err != nil {
@@ -197,11 +265,20 @@ func (ch *CommandHandler) ShowVariablesMenu(chatId int64) {
 		count = 3
 	}
 
-	text := "🔧 *Переменные*\n\nВыберите переменную для редактирования:"
+	text := "🔧 *Переменные*"
 	varLabel := fmt.Sprintf("%s: %d", ui.Text(ui.RecommendedTorrents), count)
+	tz, tzErr := ch.repo.GetUserTimezone(ctx, chatId)
+	if tzErr != nil || tz == "" {
+		tz = "Europe/Minsk"
+	}
+	tzLabel := fmt.Sprintf("%s: %s", ui.Text(ui.Timezone), tz)
+
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Data(varLabel, "edit_recommended_torrents"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Data(tzLabel, "edit_timezone"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.SettingsMenu),
@@ -218,34 +295,6 @@ func (ch *CommandHandler) ShowVariablesMenu(chatId int64) {
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
-// ShowVariablesMenuWithValue is like ShowVariablesMenu but uses provided count
-// to display next to the variable (useful immediately after saving).
-func (ch *CommandHandler) ShowVariablesMenuWithValue(chatId int64, count int) {
-	logger.Debugf("Показ списка переменных (override) для пользователя %d", chatId)
-	messageID := ch.stateMgr.GetMenuMessage(chatId)
-
-	text := "🔧 *Переменные*\n\nВыберите переменную для редактирования:"
-	varLabel := fmt.Sprintf("%s: %d", ui.Text(ui.RecommendedTorrents), count)
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Data(varLabel, "edit_recommended_torrents"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.SettingsMenu),
-			ui.Button(ui.MainMenu),
-		),
-	)
-
-	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-	if err != nil {
-		logger.Error("Ошибка при отправке/обновлении списка переменных для пользователя %d: %v", chatId, err)
-
-		return
-	}
-	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
-}
-
-// ShowEditRecommendedTorrents displays editor for recommended torrents count.
 func (ch *CommandHandler) ShowEditRecommendedTorrents(chatId int64) {
 	logger.Debugf("Показ редактора recommended torrents для пользователя %d", chatId)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)

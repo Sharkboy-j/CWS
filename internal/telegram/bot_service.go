@@ -2,11 +2,9 @@ package telegram
 
 import (
 	"context"
-	"cws/internal"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -91,10 +89,6 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 		username := update.Message.From.UserName
 		logger.Debugf("Пользователь %d (@%s) отправил сообщение: %s", chatId, username, update.Message.Text)
 
-		if update.Message.Location != nil {
-			bs.handleUserLocation(chatId, update.Message.Location)
-		}
-
 		if update.Message.Document != nil {
 			bs.handleDocument(chatId, update.Message)
 
@@ -103,23 +97,6 @@ func (bs *BotService) handleUpdate(update tgbotapi.Update) {
 
 		bs.dialogHdlr.HandleMessage(update.Message)
 	}
-}
-
-func (bs *BotService) handleUserLocation(chatId int64, location *tgbotapi.Location) {
-	ctx := context.Background()
-	logger.Debugf("Пользователь %d отправил локацию: lat=%.6f, lon=%.6f", chatId, location.Latitude, location.Longitude)
-
-	timezone := internal.DetermineTimezoneByCoordinates(location.Latitude, location.Longitude)
-
-	err := bs.repo.SetUserTimezone(ctx, chatId, timezone)
-	if err != nil {
-		logger.Error("Ошибка при сохранении часового пояса для пользователя %d: %v", chatId, err)
-
-		return
-	}
-
-	logger.Info("Часовой пояс пользователя %d установлен: %s", chatId, timezone)
-	_, _ = bs.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("✅ Часовой пояс установлен: %s", timezone), nil)
 }
 
 func (bs *BotService) handleDocument(chatId int64, message *tgbotapi.Message) {

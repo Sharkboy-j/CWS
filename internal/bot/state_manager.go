@@ -59,8 +59,7 @@ func (sm *StateManager) GetUserState(chatId int64) (string, bool) {
 func (sm *StateManager) DeleteUserState(chatId int64) {
 	ctx := context.Background()
 	delete(sm.userState, chatId)
-	delete(sm.dialogMessage, chatId) // Удаляем и message_id
-	// Preserve user row and only clear the state column to avoid losing user-specific settings.
+	delete(sm.dialogMessage, chatId)
 	if err := sm.repo.SetUserState(ctx, chatId, ""); err != nil {
 		logger.Error("Ошибка при очистке состояния пользователя %d: %v", chatId, err)
 	}

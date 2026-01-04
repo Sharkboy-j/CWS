@@ -40,6 +40,7 @@ const (
 	SettingsMenu        ButtonID = "settings_menu"
 	Variables           ButtonID = "variables"
 	RecommendedTorrents ButtonID = "recommended_torrents"
+	Timezone            ButtonID = "timezone"
 
 	Speed10       ButtonID = "speed_10"
 	Speed100      ButtonID = "speed_100"
@@ -225,6 +226,7 @@ var buttonResources = map[ButtonID]buttonResource{
 	ManualHashInput:     {text: map[Locale]string{LocaleRU: "✏️ Ввести хеш вручную", LocaleEN: "✏️ Enter hash manually"}},
 	ManualPathInput:     {text: map[Locale]string{LocaleRU: "✏️ Ввести путь вручную", LocaleEN: "✏️ Enter path manually"}},
 	SettingsMenu:        {data: "settings", text: map[Locale]string{LocaleRU: "⚙️ Настройки", LocaleEN: "⚙️ Settings"}},
+	Timezone:            {data: "edit_timezone", text: map[Locale]string{LocaleRU: "🕒 Часовой пояс", LocaleEN: "🕒 Timezone"}},
 	Variables:           {data: "variables", text: map[Locale]string{LocaleRU: "🔧 Переменные", LocaleEN: "🔧 Variables"}},
 	RecommendedTorrents: {data: "edit_recommended_torrents", text: map[Locale]string{LocaleRU: "📌 Рекомендуемое количество торрентов", LocaleEN: "📌 Recommended torrents count"}},
 	SkipHashYes:         {text: map[Locale]string{LocaleRU: "✅ Да, пропустить", LocaleEN: "✅ Yes, skip"}},
