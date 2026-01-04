@@ -125,6 +125,7 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 			page, err := strconv.Atoi(pageStr)
 			if err != nil {
 				logger.Warn("Пользователь %d отправил неверный номер страницы таймзон: %s", chatId, pageStr)
+
 				return
 			}
 			ch.cmdHdlr.ShowTimezoneMenu(chatId, page)
