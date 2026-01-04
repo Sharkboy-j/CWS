@@ -11,7 +11,7 @@ env:
 
 jobs:
   lint:
-    runs-on: [self-hosted, amd64]
+    runs-on: [self-hosted, arm64]
     steps:
     - uses: actions/checkout@v5
       with:
@@ -25,10 +25,10 @@ jobs:
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2.6
+        version: v2.7.2
 
   build:
-    runs-on: [self-hosted, amd64]
+    runs-on: [self-hosted, arm64]
     needs: lint
     steps:
     - uses: actions/checkout@v5
@@ -55,7 +55,7 @@ jobs:
           - platform: linux/amd64
             runner: [self-hosted, amd64]
           - platform: linux/arm64
-            runner: [self-hosted, ARM64]
+            runner: [self-hosted, arm64]
     runs-on: ${{ matrix.runner }}
     steps:
     - uses: actions/checkout@v5
@@ -98,7 +98,7 @@ jobs:
         cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
   docker-manifest:
-    runs-on: [self-hosted, amd64]
+    runs-on: [self-hosted, arm64]
     needs: docker-build-push
     permissions:
       contents: read
@@ -135,7 +135,7 @@ jobs:
           ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-arm64
 
   create-release:
-    runs-on: [self-hosted, amd64]
+    runs-on: [self-hosted, arm64]
     needs: docker-manifest
     permissions:
       contents: write
