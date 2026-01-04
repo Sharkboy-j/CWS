@@ -56,7 +56,6 @@ func ensureDatabase(host string, port int, user, password, dbname string) error 
 
 func (r *Repository) runMigrations(ctx context.Context) error {
 	if err := r.createMigrationsTable(ctx); err != nil {
-
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
@@ -67,7 +66,7 @@ func (r *Repository) runMigrations(ctx context.Context) error {
 	}
 
 	migrationsDir := "internal/storage/migrations"
-	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(migrationsDir); os.IsNotExist(statErr) {
 		wd, _ := os.Getwd()
 		migrationsDir = filepath.Join(wd, "internal", "storage", "migrations")
 	}
@@ -101,36 +100,36 @@ func (r *Repository) runMigrations(ctx context.Context) error {
 			continue
 		}
 
-		content, err := os.ReadFile(file)
-		if err != nil {
+		content, readErr := os.ReadFile(file)
+		if readErr != nil {
 
-			return fmt.Errorf("failed to read migration %s: %w", migrationName, err)
+			return fmt.Errorf("failed to read migration %s: %w", migrationName, readErr)
 		}
 
-		tx, err := r.db.BeginTx(ctx, nil)
-		if err != nil {
+		tx, beginErr := r.db.BeginTx(ctx, nil)
+		if beginErr != nil {
 
-			return fmt.Errorf("failed to begin transaction for migration %s: %w", migrationName, err)
+			return fmt.Errorf("failed to begin transaction for migration %s: %w", migrationName, beginErr)
 		}
 
-		if _, err := tx.ExecContext(ctx, string(content)); err != nil {
+		if _, execErr := tx.ExecContext(ctx, string(content)); execErr != nil {
 			_ = tx.Rollback()
 
-			return fmt.Errorf("failed to execute migration %s: %w", migrationName, err)
+			return fmt.Errorf("failed to execute migration %s: %w", migrationName, execErr)
 		}
 
-		if _, err := tx.ExecContext(ctx,
+		if _, recordErr := tx.ExecContext(ctx,
 			"INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NOW())",
-			migrationName); err != nil {
+			migrationName); recordErr != nil {
 			_ = tx.Rollback()
 
-			return fmt.Errorf("failed to record migration %s: %w", migrationName, err)
+			return fmt.Errorf("failed to record migration %s: %w", migrationName, recordErr)
 		}
 
-		if err := tx.Commit(); err != nil {
-			logger.Error("Ошибка при коммите миграции %s: %v", migrationName, err)
+		if commitErr := tx.Commit(); commitErr != nil {
+			logger.Error("Ошибка при коммите миграции %s: %v", migrationName, commitErr)
 
-			return fmt.Errorf("failed to commit migration %s: %w", migrationName, err)
+			return fmt.Errorf("failed to commit migration %s: %w", migrationName, commitErr)
 		}
 
 		logger.Info("Применена миграция: %s (номер: %d)", migrationName, migrationNum)
@@ -164,7 +163,7 @@ func (r *Repository) getAppliedMigrations(ctx context.Context) (map[string]bool,
 	applied := make(map[string]bool)
 	for rows.Next() {
 		var version string
-		if err := rows.Scan(&version); err != nil {
+		if err = rows.Scan(&version); err != nil {
 
 			return nil, err
 		}

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -46,7 +47,7 @@ func (tss *TorrentSearchService) StartTorrentSearchDialog(chatId int64) {
 	text := "🔎 *Поиск торрента*\n\nВведите хеш или название торрента (частичное или полное):"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "main_menu"),
+			ui.ButtonWithData(ui.Cancel, "main_menu"),
 		),
 	)
 	messageID := tss.stateMgr.GetMenuMessage(chatId)
@@ -68,7 +69,7 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 		text := "❌ Ошибка при получении списка клиентов"
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tss.stateMgr.GetMenuMessage(chatId)
@@ -81,10 +82,10 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 		text := "🔎 *Поиск торрента*\n\nКлиенты не найдены. Добавьте клиента для поиска."
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
+				ui.Button(ui.AddClient),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tss.stateMgr.GetMenuMessage(chatId)
@@ -99,16 +100,16 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 	var searchResults []TorrentSearchResult
 
 	for _, client := range clients {
-		qbClient, err := qbit.New(ctx, client)
-		if err != nil {
-			logger.Warn("Ошибка при подключении к клиенту %s для поиска: %v", client.Name, err)
+		qbClient, qbErr := qbit.New(ctx, client)
+		if qbErr != nil {
+			logger.Warn("Ошибка при подключении к клиенту %s для поиска: %v", client.Name, qbErr)
 
 			continue
 		}
 
-		torrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
-		if err != nil {
-			logger.Warn("Ошибка при получении торрентов от клиента %s: %v", client.Name, err)
+		torrents, torrentsErr := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
+		if torrentsErr != nil {
+			logger.Warn("Ошибка при получении торрентов от клиента %s: %v", client.Name, torrentsErr)
 
 			continue
 		}
@@ -155,10 +156,10 @@ func (tss *TorrentSearchService) ShowSearchResultsPage(chatId int64, page int) {
 		text := "Результаты поиска устарели. Выполните поиск заново."
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🔎 Новый поиск", "search_torrent"),
+				ui.Button(ui.NewSearch),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tss.stateMgr.GetMenuMessage(chatId)
@@ -196,10 +197,10 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 		text := fmt.Sprintf("🔎 *Поиск торрента*\n\n❌ По запросу `%s` ничего не найдено", query)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🔎 Новый поиск", "search_torrent"),
+				ui.Button(ui.NewSearch),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		_, _ = tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
@@ -245,7 +246,7 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 		text.WriteString(fmt.Sprintf("   Hash: `%s`\n\n", result.Hash))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("%d. %s", globalIdx+1, truncatePath(displayName, 999)),
 				fmt.Sprintf("search_torrent_select_%d", globalIdx),
 			),
@@ -255,11 +256,11 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 	if totalPages > 1 {
 		var navButtons []tgbotapi.InlineKeyboardButton
 		if page > 0 {
-			navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("◀️ Назад", fmt.Sprintf("page_search_%d", page-1)))
+			navButtons = append(navButtons, ui.ButtonWithData(ui.PrevPage, fmt.Sprintf("page_search_%d", page-1)))
 		}
-		navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%d/%d", page+1, totalPages), "page_info"))
+		navButtons = append(navButtons, ui.Data(fmt.Sprintf("%d/%d", page+1, totalPages), "page_info"))
 		if page < totalPages-1 {
-			navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("Вперёд ▶️", fmt.Sprintf("page_search_%d", page+1)))
+			navButtons = append(navButtons, ui.ButtonWithData(ui.NextPage, fmt.Sprintf("page_search_%d", page+1)))
 		}
 		if len(navButtons) > 0 {
 			rows = append(rows, navButtons)
@@ -267,8 +268,8 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔎 Новый поиск", "search_torrent"),
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.NewSearch),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)

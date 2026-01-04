@@ -9,6 +9,8 @@ import (
 	"github.com/autobrr/go-qbittorrent"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
+	"cws/internal/bot/ui"
+	"cws/internal/textutil"
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
 )
@@ -32,7 +34,7 @@ func (tms *torrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 		text := fmt.Sprintf("✅ *\n\nКлиент: *%s*\n\n⏳ Обработка...", client.Name)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tms.getMenuMessage(chatId)
@@ -104,7 +106,7 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 		text := fmt.Sprintf("✅ \n\nКлиент: *%s*\n\n⏳ Торрент обрабатывается qBittorrent...\n\n_Обработка..._", client.Name)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tms.getMenuMessage(monitor.ChatID)
@@ -118,7 +120,7 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 	var torrentURL string
 	props, err := qbClient.GetTorrentPropertiesCtx(ctx, monitor.Hash)
 	if err == nil {
-		torrentURL = extractURLFromComment(props.Comment)
+		torrentURL = textutil.ExtractURLFromComment(props.Comment)
 	}
 
 	text := tms.formatTorrentProgress(torrent, client.Name, numPeers)
@@ -130,7 +132,7 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 		))
 	}
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)

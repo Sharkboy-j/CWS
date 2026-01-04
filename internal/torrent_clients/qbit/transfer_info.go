@@ -54,7 +54,7 @@ func (s *service) GetTransferInfo(ctx context.Context) (*TransferInfo, error) {
 		UpRateLimit int64 `json:"up_rate_limit"`
 	}
 
-	if err := json.Unmarshal(body, &transferInfo); err != nil {
+	if err = json.Unmarshal(body, &transferInfo); err != nil {
 		logger.Error("Error parsing transfer info response: %v", err)
 
 		return nil, fmt.Errorf("failed to parse transfer info response: %w", err)

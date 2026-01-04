@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
 	"fmt"
@@ -58,7 +59,7 @@ func (dh *DocumentHandler) HandleDocument(ctx context.Context, chatId int64, doc
 	text := fmt.Sprintf("📥 *Обработка торрент файла*\n\n📎 Файл: `%s`\n\n⏳ Обрабатываю...", document.FileName)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
+			ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),
 		),
 	)
 	messageID := dh.stateMgr.GetMenuMessage(chatId)

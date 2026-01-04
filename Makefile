@@ -20,11 +20,13 @@ endif
 lint:
 	@echo "Running linter..."
 	@which golangci-lint > /dev/null || (echo "golangci-lint not found. Install it with: make lint-install" && exit 1)
+	golangci-lint fmt
 	golangci-lint run
 
-lint-install:
+lint-install-mac:
 	@echo "Installing golangci-lint..."
-	@which golangci-lint > /dev/null || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
+	brew install golangci-lint
+	brew upgrade golangci-lint	
 	@echo "golangci-lint installed successfully"
 
 # Build and push multi-arch image

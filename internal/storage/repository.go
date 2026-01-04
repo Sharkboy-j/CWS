@@ -4,6 +4,7 @@ import (
 	"context"
 	"cws/logger"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,7 +15,6 @@ type Repository struct {
 	db *sql.DB
 }
 
-// NewRepository создает новый экземпляр репозитория
 func NewRepository(host string, port int, user, password, dbname string) (*Repository, error) {
 	logger.Info("Проверка существования БД: %s", dbname)
 	if err := ensureDatabase(host, port, user, password, dbname); err != nil {
@@ -35,7 +35,7 @@ func NewRepository(host string, port int, user, password, dbname string) (*Repos
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
+	if err = db.Ping(); err != nil {
 		logger.Error("Ошибка при проверке подключения к БД: %v", err)
 
 		return nil, fmt.Errorf("failed to ping database: %w", err)
@@ -45,7 +45,7 @@ func NewRepository(host string, port int, user, password, dbname string) (*Repos
 	repo := &Repository{db: db}
 
 	logger.Info("Применение миграций БД...")
-	if err := repo.runMigrations(context.Background()); err != nil {
+	if err = repo.runMigrations(context.Background()); err != nil {
 		logger.Error("Ошибка при применении миграций: %v", err)
 
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
@@ -55,12 +55,10 @@ func NewRepository(host string, port int, user, password, dbname string) (*Repos
 	return repo, nil
 }
 
-// Close закрывает соединение с БД
 func (r *Repository) Close() error {
 	return r.db.Close()
 }
 
-// GetAllClients возвращает список всех клиентов для конкретного пользователя
 func (r *Repository) GetAllClients(ctx context.Context, userID int64) ([]*Client, error) {
 	logger.Debug("Запрос списка клиентов для пользователя %d", userID)
 	query := `SELECT id, user_id, name, host, port, username, password, ssl, created_at, updated_at 
@@ -78,15 +76,14 @@ func (r *Repository) GetAllClients(ctx context.Context, userID int64) ([]*Client
 	var clients []*Client
 	for rows.Next() {
 		var c Client
-		err := rows.Scan(&c.ID, &c.UserID, &c.Name, &c.Host, &c.Port, &c.Username, &c.Password, &c.SSL, &c.CreatedAt, &c.UpdatedAt)
-		if err != nil {
+		if err = rows.Scan(&c.ID, &c.UserID, &c.Name, &c.Host, &c.Port, &c.Username, &c.Password, &c.SSL, &c.CreatedAt, &c.UpdatedAt); err != nil {
 
 			return nil, fmt.Errorf("failed to scan client: %w", err)
 		}
 		clients = append(clients, &c)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		logger.Error("Ошибка при итерации строк для пользователя %d: %v", userID, err)
 
 		return nil, fmt.Errorf("error iterating rows: %w", err)
@@ -97,7 +94,6 @@ func (r *Repository) GetAllClients(ctx context.Context, userID int64) ([]*Client
 	return clients, nil
 }
 
-// GetClientByID возвращает клиента по ID, только если он принадлежит пользователю
 func (r *Repository) GetClientByID(ctx context.Context, id int64, userID int64) (*Client, error) {
 	logger.Debug("Запрос клиента ID=%d для пользователя %d", id, userID)
 	query := `SELECT id, user_id, name, host, port, username, password, ssl, created_at, updated_at 
@@ -106,7 +102,7 @@ func (r *Repository) GetClientByID(ctx context.Context, id int64, userID int64) 
 	var c Client
 	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&c.ID, &c.UserID, &c.Name, &c.Host, &c.Port, &c.Username, &c.Password, &c.SSL, &c.CreatedAt, &c.UpdatedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		logger.Debug("Клиент ID=%d не найден для пользователя %d", id, userID)
 
 		return nil, nil
@@ -122,7 +118,6 @@ func (r *Repository) GetClientByID(ctx context.Context, id int64, userID int64) 
 	return &c, nil
 }
 
-// CreateClient создает нового клиента
 func (r *Repository) CreateClient(ctx context.Context, client *Client) (*Client, error) {
 	logger.Debugf("Создание клиента для пользователя %d: Name=%s, Host=%s:%d", client.UserID, client.Name, client.Host, client.Port)
 	query := `INSERT INTO clients (user_id, name, host, port, username, password, ssl, created_at, updated_at)
@@ -145,7 +140,6 @@ func (r *Repository) CreateClient(ctx context.Context, client *Client) (*Client,
 	return client, nil
 }
 
-// UpdateClient обновляет данные клиента, только если он принадлежит пользователю
 func (r *Repository) UpdateClient(ctx context.Context, client *Client, userID int64) error {
 	logger.Debugf("Обновление клиента ID=%d для пользователя %d: Name=%s, Host=%s:%d", client.ID, userID, client.Name, client.Host, client.Port)
 	query := `UPDATE clients 
@@ -178,7 +172,6 @@ func (r *Repository) UpdateClient(ctx context.Context, client *Client, userID in
 	return nil
 }
 
-// DeleteClient удаляет клиента, только если он принадлежит пользователю
 func (r *Repository) DeleteClient(ctx context.Context, id int64, userID int64) error {
 	logger.Debugf("Удаление клиента ID=%d для пользователя %d", id, userID)
 	query := `DELETE FROM clients WHERE id = $1 AND user_id = $2`
@@ -207,7 +200,6 @@ func (r *Repository) DeleteClient(ctx context.Context, id int64, userID int64) e
 	return nil
 }
 
-// SetUserState сохраняет состояние пользователя
 func (r *Repository) SetUserState(ctx context.Context, userID int64, state string) error {
 	logger.Debug("Сохранение состояния для пользователя %d: %s", userID, state)
 	query := `INSERT INTO user_states (user_id, state, updated_at) 
@@ -225,14 +217,13 @@ func (r *Repository) SetUserState(ctx context.Context, userID int64, state strin
 	return nil
 }
 
-// GetUserState получает состояние пользователя
 func (r *Repository) GetUserState(ctx context.Context, userID int64) (string, error) {
 	logger.Debug("Получение состояния для пользователя %d", userID)
 	query := `SELECT state FROM user_states WHERE user_id = $1`
 
 	var state string
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(&state)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		logger.Debug("Состояние не найдено для пользователя %d", userID)
 
 		return "", nil
@@ -248,7 +239,6 @@ func (r *Repository) GetUserState(ctx context.Context, userID int64) (string, er
 	return state, nil
 }
 
-// DeleteUserState удаляет состояние пользователя
 func (r *Repository) DeleteUserState(ctx context.Context, userID int64) error {
 	logger.Debug("Удаление состояния для пользователя %d", userID)
 	query := `DELETE FROM user_states WHERE user_id = $1`
@@ -263,7 +253,6 @@ func (r *Repository) DeleteUserState(ctx context.Context, userID int64) error {
 	return nil
 }
 
-// GetAllUserStates возвращает все состояния пользователей (для загрузки при старте)
 func (r *Repository) GetAllUserStates(ctx context.Context) (map[int64]string, error) {
 	logger.Debug("Загрузка всех состояний пользователей")
 	query := `SELECT user_id, state FROM user_states`
@@ -282,7 +271,7 @@ func (r *Repository) GetAllUserStates(ctx context.Context) (map[int64]string, er
 	for rows.Next() {
 		var userID int64
 		var state string
-		if err := rows.Scan(&userID, &state); err != nil {
+		if err = rows.Scan(&userID, &state); err != nil {
 			logger.Error("Ошибка при сканировании состояния: %v", err)
 
 			return nil, fmt.Errorf("failed to scan user state: %w", err)
@@ -290,7 +279,7 @@ func (r *Repository) GetAllUserStates(ctx context.Context) (map[int64]string, er
 		states[userID] = state
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		logger.Error("Ошибка при итерации состояний: %v", err)
 
 		return nil, fmt.Errorf("error iterating user states: %w", err)
@@ -301,7 +290,6 @@ func (r *Repository) GetAllUserStates(ctx context.Context) (map[int64]string, er
 	return states, nil
 }
 
-// SetMenuMessageID сохраняет ID последнего сообщения меню для пользователя
 func (r *Repository) SetMenuMessageID(ctx context.Context, userID int64, messageID int) error {
 	logger.Debugf("Сохранение menu_message_id для пользователя %d: %d", userID, messageID)
 	query := `UPDATE user_states 
@@ -338,14 +326,13 @@ func (r *Repository) SetMenuMessageID(ctx context.Context, userID int64, message
 	return nil
 }
 
-// GetMenuMessageID получает ID последнего сообщения меню для пользователя
 func (r *Repository) GetMenuMessageID(ctx context.Context, userID int64) (int, error) {
 	logger.Debug("Получение menu_message_id для пользователя %d", userID)
 	query := `SELECT menu_message_id FROM user_states WHERE user_id = $1`
 
 	var messageID sql.NullInt64
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(&messageID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		logger.Debug("menu_message_id не найден для пользователя %d", userID)
 
 		return 0, nil
@@ -366,7 +353,6 @@ func (r *Repository) GetMenuMessageID(ctx context.Context, userID int64) (int, e
 	return int(messageID.Int64), nil
 }
 
-// GetAllMenuMessageIDs возвращает все menu_message_id пользователей (для загрузки при старте)
 func (r *Repository) GetAllMenuMessageIDs(ctx context.Context) (map[int64]int, error) {
 	logger.Debug("Загрузка всех menu_message_id пользователей")
 	query := `SELECT user_id, menu_message_id FROM user_states WHERE menu_message_id IS NOT NULL`
@@ -385,7 +371,7 @@ func (r *Repository) GetAllMenuMessageIDs(ctx context.Context) (map[int64]int, e
 	for rows.Next() {
 		var userID int64
 		var messageID sql.NullInt64
-		if err := rows.Scan(&userID, &messageID); err != nil {
+		if err = rows.Scan(&userID, &messageID); err != nil {
 			logger.Error("Ошибка при сканировании menu_message_id: %v", err)
 
 			return nil, fmt.Errorf("failed to scan menu message id: %w", err)
@@ -395,7 +381,7 @@ func (r *Repository) GetAllMenuMessageIDs(ctx context.Context) (map[int64]int, e
 		}
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		logger.Error("Ошибка при итерации menu_message_id: %v", err)
 
 		return nil, fmt.Errorf("error iterating menu message ids: %w", err)
@@ -406,7 +392,6 @@ func (r *Repository) GetAllMenuMessageIDs(ctx context.Context) (map[int64]int, e
 	return messageIDs, nil
 }
 
-// GetAllUserIDs возвращает список всех уникальных user_id из таблицы clients
 func (r *Repository) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 	logger.Debug("Запрос всех уникальных user_id из таблицы clients")
 	query := `SELECT DISTINCT user_id FROM clients ORDER BY user_id`
@@ -424,7 +409,7 @@ func (r *Repository) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 	var userIDs []int64
 	for rows.Next() {
 		var userID int64
-		if err := rows.Scan(&userID); err != nil {
+		if err = rows.Scan(&userID); err != nil {
 			logger.Error("Ошибка при сканировании user_id: %v", err)
 
 			return nil, fmt.Errorf("failed to scan user id: %w", err)
@@ -432,7 +417,7 @@ func (r *Repository) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 		userIDs = append(userIDs, userID)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		logger.Error("Ошибка при итерации user_id: %v", err)
 
 		return nil, fmt.Errorf("error iterating user ids: %w", err)
@@ -443,7 +428,6 @@ func (r *Repository) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 	return userIDs, nil
 }
 
-// SetUserTimezone сохраняет часовой пояс пользователя
 func (r *Repository) SetUserTimezone(ctx context.Context, userID int64, timezone string) error {
 	logger.Debug("Сохранение часового пояса для пользователя %d: %s", userID, timezone)
 	query := `UPDATE user_states 
@@ -480,14 +464,13 @@ func (r *Repository) SetUserTimezone(ctx context.Context, userID int64, timezone
 	return nil
 }
 
-// GetUserTimezone получает часовой пояс пользователя
 func (r *Repository) GetUserTimezone(ctx context.Context, userID int64) (string, error) {
 	logger.Debug("Получение часового пояса для пользователя %d", userID)
 	query := `SELECT timezone FROM user_states WHERE user_id = $1`
 
 	var timezone sql.NullString
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(&timezone)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		logger.Debug("Часовой пояс не найден для пользователя %d, используем Europe/Minsk", userID)
 
 		return "Europe/Minsk", nil

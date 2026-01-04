@@ -43,8 +43,8 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		if err := botService.Start(ctx); err != nil {
-			logger.Errorf("Ошибка при работе бота: %v", err)
+		if startErr := botService.Start(ctx); startErr != nil {
+			logger.Errorf("Ошибка при работе бота: %v", startErr)
 		}
 	}()
 

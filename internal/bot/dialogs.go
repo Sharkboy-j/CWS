@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
@@ -38,7 +39,7 @@ func (dh *DialogHandler) StartAddClientDialog(chatId int64) {
 	text := "➕ *Добавление нового клиента*\n\n📝 Введите имя клиента:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_client"),
+			ui.ButtonWithData(ui.Cancel, "cancel_add_client"),
 		),
 	)
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -231,8 +232,8 @@ func (dh *DialogHandler) handleAddClientPassword(chatId int64, text, state, sepa
 	messageText := "🔒 Использовать SSL?"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Да", "set_ssl_true"),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Нет", "set_ssl_false"),
+			ui.ButtonWithData(ui.Yes, "set_ssl_true"),
+			ui.ButtonWithData(ui.No, "set_ssl_false"),
 		),
 	)
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -338,7 +339,7 @@ func (dh *DialogHandler) StartEditClientDialog(chatId int64, clientID int64) {
 	messageText := fmt.Sprintf("✏️ *Редактирование клиента*\n\n📝 Текущее имя: `%s`\n\nВведите новое имя клиента (или отправьте текущее для сохранения):", client.Name)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_edit_client"),
+			ui.ButtonWithData(ui.Cancel, "cancel_edit_client"),
 		),
 	)
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
@@ -485,8 +486,8 @@ func (dh *DialogHandler) handleEditClientPassword(chatId int64, text, state, sep
 	messageText := "🔒 Использовать SSL?"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Да", "set_edit_ssl_true"),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Нет", "set_edit_ssl_false"),
+			ui.ButtonWithData(ui.Yes, "set_edit_ssl_true"),
+			ui.ButtonWithData(ui.No, "set_edit_ssl_false"),
 		),
 	)
 	messageID := dh.stateMgr.GetDialogMessage(chatId)

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -61,28 +62,25 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 	}
 
 	var text strings.Builder
-	text.WriteString("🏠 *Главное меню*\n\n")
-
 	if len(clients) > 0 {
-		text.WriteString("📊 *Статус клиентов:*\n\n")
 		for _, client := range clients {
-			qbClient, err := qbit.New(ctx, client)
-			if err != nil {
-				logger.Error("Ошибка при подключении к клиенту %s: %v", client.Name, err)
+			qbClient, qbErr := qbit.New(ctx, client)
+			if qbErr != nil {
+				logger.Error("Ошибка при подключении к клиенту %s: %v", client.Name, qbErr)
 				text.WriteString(fmt.Sprintf("❌ *%s* - ошибка подключения\n\n", client.Name))
 
 				continue
 			}
 
-			transferInfo, err := qbClient.GetTransferInfo(ctx)
-			if err != nil {
-				logger.Error("Ошибка при получении информации о передаче для клиента %s: %v", client.Name, err)
+			transferInfo, transferErr := qbClient.GetTransferInfo(ctx)
+			if transferErr != nil {
+				logger.Error("Ошибка при получении информации о передаче для клиента %s: %v", client.Name, transferErr)
 				text.WriteString(fmt.Sprintf("⚠️ *%s* - ошибка получения данных\n\n", client.Name))
 
 				continue
 			}
 
-			text.WriteString(fmt.Sprintf("🔹 *%s*\n", client.Name))
+			text.WriteString(fmt.Sprintf("🔹 *%s* ", client.Name))
 
 			formatSpeed := func(bytesPerSec int64) string {
 				if bytesPerSec == 0 {
@@ -100,7 +98,7 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 
 			formatLimit := func(bytesPerSec int64) string {
 				if bytesPerSec == 0 {
-					return "без ограничений"
+					return ""
 				}
 
 				mbPerSec := float64(bytesPerSec) / (1024 * 1024)
@@ -108,40 +106,37 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 				return fmt.Sprintf("%.2f МБ/с", mbPerSec)
 			}
 
-			text.WriteString(fmt.Sprintf("  ⬇️ Загрузка: %s", formatSpeed(transferInfo.DownloadSpeed)))
+			text.WriteString(fmt.Sprintf("⬇️ %s", formatSpeed(transferInfo.DownloadSpeed)))
 			if transferInfo.DownloadLimit > 0 {
-				text.WriteString(fmt.Sprintf(" (лимит: %s)", formatLimit(transferInfo.DownloadLimit)))
+				text.WriteString(fmt.Sprintf(" \\[%s]", formatLimit(transferInfo.DownloadLimit)))
 			}
-			text.WriteString("\n")
+			text.WriteString(" ")
 
-			text.WriteString(fmt.Sprintf("  ⬆️ Отдача: %s", formatSpeed(transferInfo.UploadSpeed)))
+			text.WriteString(fmt.Sprintf("⬆️ %s", formatSpeed(transferInfo.UploadSpeed)))
 			if transferInfo.UploadLimit > 0 {
-				text.WriteString(fmt.Sprintf(" (лимит: %s)", formatLimit(transferInfo.UploadLimit)))
+				text.WriteString(fmt.Sprintf(" \\[%s]", formatLimit(transferInfo.UploadLimit)))
 			}
-			text.WriteString("\n\n")
 		}
 	}
 
-	text.WriteString("Выберите действие:")
-
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔍 Првоерить обновления", "check_torrents"),
+			ui.Button(ui.CheckTorrents),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⚡ Быстрые действия", "quick_actions"),
+			ui.Button(ui.QuickActionsMenu),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📋 Клиенты", "clients"),
+			ui.Button(ui.ClientsMenu),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📥 Добавить торрент файл", "add_torrent_file"),
+			ui.Button(ui.AddTorrentFile),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔎 Поиск торрента", "search_torrent"),
+			ui.Button(ui.SearchTorrent),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📊 Мониторинг торрента", "monitor_torrent"),
+			ui.Button(ui.MonitorTorrent),
 		),
 	)
 
@@ -170,7 +165,8 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 
 	if len(clients) == 0 {
 		text := "📋 *Проверка активных торрентов*\n\nКлиенты не найдены. Добавьте клиента для проверки."
-		if err := sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text); err != nil {
+		sendErr := sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text)
+		if sendErr != nil {
 			return
 		}
 
@@ -190,7 +186,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 		text.WriteString(fmt.Sprintf("   `%s:%d`\n\n", client.Host, client.Port))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("🔍 Проверить %s", client.Name),
 				fmt.Sprintf("check_client_%d", client.ID),
 			),
@@ -198,7 +194,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -227,7 +223,8 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 
 	if len(clients) == 0 {
 		text := "📋 *Клиенты qBittorrent*\n\nКлиенты не найдены. Добавьте первого клиента."
-		if err = sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text); err != nil {
+		err = sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text)
+		if err != nil {
 			return
 		}
 
@@ -246,7 +243,7 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 		text.WriteString(fmt.Sprintf("   `%s:%d`\n\n", client.Host, client.Port))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("🔧 %s", client.Name),
 				fmt.Sprintf("client_%d", client.ID),
 			),
@@ -254,11 +251,11 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
+		ui.Button(ui.AddClient),
 	))
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)

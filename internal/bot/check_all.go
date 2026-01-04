@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/rutracker"
 	"cws/internal/storage"
 	"cws/internal/torrent_clients/qbit"
@@ -38,8 +39,8 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
 		errorText := "❌ Ошибка при получении списка клиентов"
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-		if err == nil {
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
 
@@ -50,14 +51,14 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 		errorText := "📋 *Проверка активных торрентов*\n\nКлиенты не найдены. Добавьте клиента для проверки."
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
+				ui.Button(ui.AddClient),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
-		if err == nil {
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
+		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
 
@@ -111,8 +112,8 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 		keyboardRows = resultKeyboard.InlineKeyboard
 	}
 	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.RepeatCheck),
+		ui.Button(ui.MainMenu),
 	))
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
@@ -145,8 +146,8 @@ func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
 		keyboardRows = resultKeyboard.InlineKeyboard
 	}
 	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.RepeatCheck),
+		ui.Button(ui.MainMenu),
 	))
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
@@ -183,7 +184,7 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	statusText := fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Начинаю проверку %d клиентов...", len(clients))
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+			ui.Button(ui.MainMenu),
 		),
 	)
 	var newMessageID int
@@ -223,8 +224,8 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 		keyboardRows = resultKeyboard.InlineKeyboard
 	}
 	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", "check_torrents"),
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.RepeatCheck),
+		ui.Button(ui.MainMenu),
 	))
 	finalKeyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
@@ -491,11 +492,11 @@ func (ch *ClientHandler) formatAllClientsResult(ctx context.Context, chatId int6
 			if totalPages > 1 {
 				var navButtons []tgbotapi.InlineKeyboardButton
 				if page > 0 {
-					navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("◀️ Назад", fmt.Sprintf("page_missing_%d", page-1)))
+					navButtons = append(navButtons, ui.ButtonWithData(ui.PrevPage, fmt.Sprintf("page_missing_%d", page-1)))
 				}
-				navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%d/%d", page+1, totalPages), "page_info"))
+				navButtons = append(navButtons, ui.Data(fmt.Sprintf("%d/%d", page+1, totalPages), "page_info"))
 				if page < totalPages-1 {
-					navButtons = append(navButtons, tgbotapi.NewInlineKeyboardButtonData("Вперёд ▶️", fmt.Sprintf("page_missing_%d", page+1)))
+					navButtons = append(navButtons, ui.ButtonWithData(ui.NextPage, fmt.Sprintf("page_missing_%d", page+1)))
 				}
 				if len(navButtons) > 0 {
 					keyboardRows = append(keyboardRows, navButtons)

@@ -4,8 +4,6 @@ import (
 	"context"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
-	"regexp"
-	"strings"
 )
 
 type TorrentMonitorService interface {
@@ -36,28 +34,4 @@ func NewTorrentMonitorService(repo *storage.Repository, msgSender messaging.Mess
 		setMenuMessage:    setMenuMessage,
 		torrentMonitoring: make(map[int64]*TorrentMonitor),
 	}
-}
-
-func extractURLFromComment(comment string) string {
-	if comment == "" {
-		return ""
-	}
-
-	urlPattern := regexp.MustCompile(`https?://[^\s<>"{}|\\^` + "`" + `\[\]]+`)
-	matches := urlPattern.FindString(comment)
-	if matches != "" {
-		return matches
-	}
-
-	rutrackerPattern := regexp.MustCompile(`(?:rutracker\.org|rutracker\.cc)/[^\s<>"{}|\\^` + "`" + `\[\]]+`)
-	matches = rutrackerPattern.FindString(comment)
-	if matches != "" {
-		if !strings.HasPrefix(matches, "http://") && !strings.HasPrefix(matches, "https://") {
-			return "https://" + matches
-		}
-
-		return matches
-	}
-
-	return ""
 }

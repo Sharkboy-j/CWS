@@ -2,6 +2,7 @@ package quick_actions
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
@@ -63,12 +64,12 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 		text := "⚡ *Быстрые действия*\n\nКлиенты не найдены. Добавьте клиента для использования быстрых действий."
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
-		newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-		if err != nil {
-			logger.Error("Error sending message for user %d: %v", chatId, err)
+		newMessageID, sendErr := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		if sendErr != nil {
+			logger.Error("Error sending message for user %d: %v", chatId, sendErr)
 
 			return
 		}
@@ -80,16 +81,16 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 	text := "⚡ *Быстрые действия*\n\nВыберите действие:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⏸ Остановить все раздачи", "quick_action_pause_all"),
+			ui.Button(ui.PauseAllTorrents),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("▶ Запустить все раздачи", "quick_action_resume_all"),
+			ui.Button(ui.ResumeAllTorrents),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🚦 Ограничить скорость", "quick_action_limit_speed_menu"),
+			ui.Button(ui.SpeedLimitMenu),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+			ui.Button(ui.MainMenu),
 		),
 	)
 
@@ -100,4 +101,25 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 		return
 	}
 	h.stateMgr.SetMenuMessage(chatId, newMessageID)
+}
+
+func (h *Handler) getClientsAndMenuMessageOrReply(chatId int64) (context.Context, []*storage.Client, int, bool) {
+	ctx := context.Background()
+	clients, err := h.repo.GetAllClients(ctx, chatId)
+	if err != nil {
+		logger.Error("Error getting clients for user %d: %v", chatId, err)
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении списка клиентов", nil)
+
+		return nil, nil, 0, false
+	}
+
+	if len(clients) == 0 {
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, "❌ Клиенты не найдены", nil)
+
+		return nil, nil, 0, false
+	}
+
+	messageID := h.stateMgr.GetMenuMessage(chatId)
+
+	return ctx, clients, messageID, true
 }

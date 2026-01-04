@@ -5,6 +5,7 @@ import (
 	"cws/config"
 	"cws/internal/bot/monitoring"
 	"cws/internal/bot/quick_actions"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -114,26 +115,6 @@ func (s *stateSetterAdapter) SetUserState(chatId int64, state string) {
 	s.stateMgr.SetUserState(chatId, state)
 }
 
-func (ch *ClientHandler) getClientByIDWithErrorHandling(chatId int64, clientID int64) (*storage.Client, bool) {
-	ctx := context.Background()
-	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
-	if err != nil {
-		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении данных клиента", nil)
-
-		return nil, false
-	}
-
-	if client == nil {
-		logger.Warn("Пользователь %d попытался получить доступ к несуществующему клиенту %d", chatId, clientID)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Клиент не найден или у вас нет доступа", nil)
-
-		return nil, false
-	}
-
-	return client, true
-}
-
 func (ch *ClientHandler) ShowClientDetails(chatId int64, clientID int64) {
 	client, ok := ch.getClientByIDWithErrorHandling(chatId, clientID)
 	if !ok {
@@ -154,12 +135,12 @@ func (ch *ClientHandler) ShowClientDetails(chatId int64, clientID int64) {
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить", fmt.Sprintf("edit_client_%d", clientID)),
-			tgbotapi.NewInlineKeyboardButtonData("🗑 Удалить", fmt.Sprintf("delete_client_%d", clientID)),
+			ui.ButtonWithData(ui.Edit, fmt.Sprintf("edit_client_%d", clientID)),
+			ui.ButtonWithData(ui.Delete, fmt.Sprintf("delete_client_%d", clientID)),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад к списку", "clients"),
-			tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+			ui.Button(ui.BackToList),
+			ui.Button(ui.MainMenu),
 		),
 	)
 
@@ -183,8 +164,8 @@ func (ch *ClientHandler) ShowDeleteConfirmation(chatId int64, clientID int64) {
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Да, удалить", fmt.Sprintf("confirm_delete_%d", clientID)),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", fmt.Sprintf("client_%d", clientID)),
+			ui.ButtonWithData(ui.ConfirmDelete, fmt.Sprintf("confirm_delete_%d", clientID)),
+			ui.ButtonWithData(ui.Cancel, fmt.Sprintf("client_%d", clientID)),
 		),
 	)
 
@@ -238,15 +219,15 @@ func (ch *ClientHandler) ShowClientsForTorrentAdd(chatId int64) {
 		errorText := "📥 *Добавление торрент файла*\n\nКлиенты не найдены. Добавьте клиента для загрузки торрента."
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
+				ui.Button(ui.AddClient),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := ch.stateMgr.GetMenuMessage(chatId)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
-		if err == nil {
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
+		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
 
@@ -262,7 +243,7 @@ func (ch *ClientHandler) ShowClientsForTorrentAdd(chatId int64) {
 			sslText = "🔓"
 		}
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("%s %s", sslText, client.Name),
 				fmt.Sprintf("add_torrent_client_%d", client.ID),
 			),
@@ -270,7 +251,7 @@ func (ch *ClientHandler) ShowClientsForTorrentAdd(chatId int64) {
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -296,15 +277,15 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
 		errorText := "📊 *Мониторинг торрента*\n\nКлиенты не найдены. Добавьте клиента для мониторинга."
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("➕ Добавить клиента", "add_client"),
+				ui.Button(ui.AddClient),
 			),
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := ch.stateMgr.GetMenuMessage(chatId)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
-		if err == nil {
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
+		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
 
@@ -320,7 +301,7 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
 			sslText = "🔓"
 		}
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("%s %s", sslText, client.Name),
 				fmt.Sprintf("monitor_torrent_client_%d", client.ID),
 			),
@@ -328,7 +309,7 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -353,8 +334,8 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 	if err != nil {
 		logger.Error("Ошибка при подключении к qBit клиенту для мониторинга: %v", err)
 	} else {
-		torrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
-		if err == nil && len(torrents) > 0 {
+		torrents, torrentsErr := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
+		if torrentsErr == nil && len(torrents) > 0 {
 			sortedTorrents := make([]qbittorrent.Torrent, len(torrents))
 			copy(sortedTorrents, torrents)
 
@@ -402,7 +383,7 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 						name = name[:37] + "..."
 					}
 					rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-						tgbotapi.NewInlineKeyboardButtonData(
+						ui.Data(
 							fmt.Sprintf("📁 %s", name),
 							fmt.Sprintf("monitor_torrent_hash_btn_%d_%d", clientID, i),
 						),
@@ -410,17 +391,17 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 				}
 
 				rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("✏️ Ввести хеш вручную", fmt.Sprintf("monitor_torrent_manual_%d", clientID)),
+					ui.ButtonWithData(ui.ManualHashInput, fmt.Sprintf("monitor_torrent_manual_%d", clientID)),
 				))
 				rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "main_menu"),
+					ui.ButtonWithData(ui.Cancel, "main_menu"),
 				))
 
 				keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
 				messageID := ch.stateMgr.GetMenuMessage(chatId)
-				newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-				if err != nil {
-					logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
+				newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+				if sendErr != nil {
+					logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, sendErr)
 
 					return
 				}
@@ -439,7 +420,7 @@ func (ch *ClientHandler) StartTorrentMonitorManualInput(chatId int64, clientID i
 	text := "📊 *Мониторинг торрента*\n\nВведите хеш торрента для мониторинга:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "main_menu"),
+			ui.ButtonWithData(ui.Cancel, "main_menu"),
 		),
 	)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
@@ -488,11 +469,8 @@ func (ch *ClientHandler) formatTimeInUserTimezone(ctx context.Context, chatId in
 
 func (ch *ClientHandler) StartAddTorrentDialog(chatId int64, clientID int64) {
 	ctx := context.Background()
-	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
-	if err != nil || client == nil {
-		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении данных клиента", nil)
-
+	client, ok := ch.getClientByIDOrReply(ctx, chatId, clientID)
+	if !ok {
 		return
 	}
 
@@ -500,7 +478,7 @@ func (ch *ClientHandler) StartAddTorrentDialog(chatId int64, clientID int64) {
 	text := fmt.Sprintf("📥 *Добавление торрент файла*\n\nКлиент: *%s*\n\n📎 Отправьте торрент файл (.torrent):", client.Name)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
+			ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),
 		),
 	)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
@@ -514,19 +492,8 @@ func (ch *ClientHandler) StartAddTorrentDialog(chatId int64, clientID int64) {
 }
 
 func (ch *ClientHandler) HandleTorrentFileReceived(ctx context.Context, chatId int64, clientID int64, fileData []byte, fileName string) {
-	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
-	if err != nil || client == nil {
-		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении данных клиента", nil)
-
-		return
-	}
-
-	qbClient, err := qbit.New(ctx, client)
-	if err != nil {
-		logger.Error("Ошибка при подключении к qBit клиенту %s для пользователя %d: %v", client.Name, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*", client.Name), nil)
-
+	qbClient, _, ok := ch.getQbClientByIDOrReply(ctx, chatId, clientID)
+	if !ok {
 		return
 	}
 
@@ -541,8 +508,8 @@ func (ch *ClientHandler) HandleTorrentFileReceived(ctx context.Context, chatId i
 	var torrentName string
 	if torrentInfo != nil {
 		torrentName = torrentInfo.Name
-		allTorrents, err := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
-		if err == nil {
+		allTorrents, getErr := qbClient.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
+		if getErr == nil {
 			existingTorrent := qbit.FindTorrentByName(allTorrents, torrentInfo.Name)
 			if existingTorrent != nil && existingTorrent.SavePath != "" {
 				existingPath = existingTorrent.SavePath
@@ -593,7 +560,7 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 	if existingPath != "" {
 		text += fmt.Sprintf("⭐ *Рекомендуется* (используется для этого торрента):\n`%s`\n\n", existingPath)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("⭐ Рекомендуется: %s", truncatePath(existingPath, 999)),
 				fmt.Sprintf("select_save_path_%d_%d", clientID, -2),
 			),
@@ -603,7 +570,7 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 	if defaultPath != "" && defaultPath != existingPath {
 		text += fmt.Sprintf("По умолчанию: `%s`\n\n", defaultPath)
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
+			ui.Data(
 				fmt.Sprintf("📂 По умолчанию (%s)", truncatePath(defaultPath, 999)),
 				fmt.Sprintf("select_save_path_%d_%d", clientID, -1),
 			),
@@ -623,7 +590,7 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 				continue
 			}
 			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData(
+				ui.Data(
 					fmt.Sprintf("📂 %s", truncatePath(path, 999)),
 					fmt.Sprintf("select_save_path_%d_%d", clientID, i),
 				),
@@ -633,11 +600,11 @@ func (ch *ClientHandler) ShowSavePathSelection(chatId int64, clientID int64, sav
 	}
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("✏️ Ввести путь вручную", fmt.Sprintf("custom_save_path_%d", clientID)),
+		ui.ButtonWithData(ui.ManualPathInput, fmt.Sprintf("custom_save_path_%d", clientID)),
 	))
 
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
+		ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -691,7 +658,7 @@ func (ch *ClientHandler) StartCustomSavePathDialog(chatId int64, clientID int64)
 	text := "✏️ *Ввод пути сохранения*\n\nВведите путь для сохранения торрента:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
+			ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),
 		),
 	)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
@@ -708,11 +675,11 @@ func (ch *ClientHandler) ShowSkipHashCheckQuestion(chatId int64, clientID int64,
 	text := fmt.Sprintf("⚙️ *Настройки добавления торрента*\n\nПуть сохранения: `%s`\n\n❓ Пропустить проверку хеша при добавлении?\n\n_Проверка хеша может занять время, но гарантирует целостность данных._", savePath)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Да, пропустить", fmt.Sprintf("skip_hash_check_%d_true", clientID)),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Нет, проверить", fmt.Sprintf("skip_hash_check_%d_false", clientID)),
+			ui.ButtonWithData(ui.SkipHashYes, fmt.Sprintf("skip_hash_check_%d_true", clientID)),
+			ui.ButtonWithData(ui.SkipHashNo, fmt.Sprintf("skip_hash_check_%d_false", clientID)),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "cancel_add_torrent"),
+			ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),
 		),
 	)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
@@ -734,23 +701,12 @@ func (ch *ClientHandler) CancelAddTorrent(chatId int64) {
 }
 
 func (ch *ClientHandler) AddTorrentToClient(ctx context.Context, chatId int64, clientID int64, fileData []byte, savePath string, skipHashCheck bool) {
-	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
-	if err != nil || client == nil {
-		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении данных клиента", nil)
-
+	qbClient, _, ok := ch.getQbClientByIDOrReply(ctx, chatId, clientID)
+	if !ok {
 		return
 	}
 
-	qbClient, err := qbit.New(ctx, client)
-	if err != nil {
-		logger.Error("Ошибка при подключении к qBit клиенту %s для пользователя %d: %v", client.Name, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*", client.Name), nil)
-
-		return
-	}
-
-	err = qbClient.AddTorrentFile(ctx, fileData, savePath, "", skipHashCheck)
+	err := qbClient.AddTorrentFile(ctx, fileData, savePath, "", skipHashCheck)
 	if err != nil {
 		logger.Error("Ошибка при добавлении торрента: %v", err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("❌ Ошибка при добавлении торрента: %v", err), nil)
@@ -774,18 +730,7 @@ func (ch *ClientHandler) AddTorrentToClient(ctx context.Context, chatId int64, c
 		logger.Warn("Не удалось извлечь hash из торрент файла: %v", err)
 	}
 
-	ch.stateMgr.DeleteUserState(chatId)
-	delete(ch.torrentFilesCache, chatId)
-
-	if newTorrentHash != "" {
-		logger.Debug("Запуск мониторинга торрента для пользователя %d, hash: %s", chatId, newTorrentHash)
-		ch.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, newTorrentHash)
-	} else {
-		logger.Warn("Hash не получен, переход в главное меню для пользователя %d", chatId)
-		if ch.cmdHdlr != nil {
-			ch.cmdHdlr.ShowMainMenu(chatId)
-		}
-	}
+	ch.finalizeTorrentFlow(ctx, chatId, clientID, newTorrentHash)
 }
 
 func (ch *ClientHandler) HandleSkipHashCheckSelection(chatId int64, clientID int64, skipHashCheck bool) {
@@ -812,8 +757,8 @@ func (ch *ClientHandler) ShowDeleteExistingTorrentQuestion(chatId int64, clientI
 	text := fmt.Sprintf("✅ \n\n⚠️ Найден существующий торрент с таким же названием:\n`%s`\n\n❓ Удалить старый торрент?", torrentName)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Да, удалить", fmt.Sprintf("delete_existing_torrent_%d", clientID)),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Нет, оставить", fmt.Sprintf("keep_existing_torrent_%d", clientID)),
+			ui.ButtonWithData(ui.ConfirmDelete, fmt.Sprintf("delete_existing_torrent_%d", clientID)),
+			ui.ButtonWithData(ui.KeepExisting, fmt.Sprintf("keep_existing_torrent_%d", clientID)),
 		),
 	)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
@@ -831,11 +776,11 @@ func (ch *ClientHandler) ShowDeleteFilesQuestion(chatId int64, clientID int64, h
 	text := "🗑️ *Удаление торрента*\n\n❓ Удалить файлы вместе с торрентом?\n\n_Если выбрать \"Да\", файлы будут удалены с диска._"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Да, удалить файлы", fmt.Sprintf("confirm_delete_torrent_%d_true", clientID)),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Нет, только торрент", fmt.Sprintf("confirm_delete_torrent_%d_false", clientID)),
+			ui.ButtonWithData(ui.DeleteFilesYes, fmt.Sprintf("confirm_delete_torrent_%d_true", clientID)),
+			ui.ButtonWithData(ui.DeleteFilesNo, fmt.Sprintf("confirm_delete_torrent_%d_false", clientID)),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", fmt.Sprintf("keep_existing_torrent_%d", clientID)),
+			ui.ButtonWithData(ui.Cancel, fmt.Sprintf("keep_existing_torrent_%d", clientID)),
 		),
 	)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
@@ -850,23 +795,12 @@ func (ch *ClientHandler) ShowDeleteFilesQuestion(chatId int64, clientID int64, h
 
 func (ch *ClientHandler) HandleDeleteExistingTorrent(chatId int64, clientID int64, hash string, deleteFiles bool) {
 	ctx := context.Background()
-	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
-	if err != nil || client == nil {
-		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении данных клиента", nil)
-
+	qbClient, client, ok := ch.getQbClientByIDOrReply(ctx, chatId, clientID)
+	if !ok {
 		return
 	}
 
-	qbClient, err := qbit.New(ctx, client)
-	if err != nil {
-		logger.Error("Ошибка при подключении к qBit клиенту %s для пользователя %d: %v", client.Name, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*", client.Name), nil)
-
-		return
-	}
-
-	err = qbClient.DeleteTorrent(ctx, hash, deleteFiles)
+	err := qbClient.DeleteTorrent(ctx, hash, deleteFiles)
 	if err != nil {
 		logger.Error("Ошибка при удалении торрента: %v", err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("❌ Ошибка при удалении торрента: %v", err), nil)
@@ -879,8 +813,8 @@ func (ch *ClientHandler) HandleDeleteExistingTorrent(chatId int64, clientID int6
 	cache, exists := ch.torrentFilesCache[chatId]
 	var newTorrentHash string
 	if exists && cache != nil {
-		torrentInfo, err := qbit.ParseTorrentFile(cache.FileData)
-		if err == nil && torrentInfo != nil {
+		torrentInfo, parseErr := qbit.ParseTorrentFile(cache.FileData)
+		if parseErr == nil && torrentInfo != nil {
 			newTorrentHash = torrentInfo.InfoHash
 		}
 	}
@@ -897,13 +831,7 @@ func (ch *ClientHandler) HandleDeleteExistingTorrent(chatId int64, clientID int6
 		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 	}
 
-	if newTorrentHash != "" {
-		ch.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, newTorrentHash)
-	} else {
-		if ch.cmdHdlr != nil {
-			ch.cmdHdlr.ShowMainMenu(chatId)
-		}
-	}
+	ch.finalizeTorrentFlow(ctx, chatId, clientID, newTorrentHash)
 }
 
 func (ch *ClientHandler) HandleKeepExistingTorrent(chatId int64, clientID int64) {
@@ -912,27 +840,16 @@ func (ch *ClientHandler) HandleKeepExistingTorrent(chatId int64, clientID int64)
 	cache, exists := ch.torrentFilesCache[chatId]
 	var newTorrentHash string
 	if exists && cache != nil {
-		torrentInfo, err := qbit.ParseTorrentFile(cache.FileData)
-		if err == nil && torrentInfo != nil {
+		torrentInfo, parseErr := qbit.ParseTorrentFile(cache.FileData)
+		if parseErr == nil && torrentInfo != nil {
 			newTorrentHash = torrentInfo.InfoHash
 			logger.Debug("Извлечен hash нового торрента из кэша: %s", newTorrentHash)
 		} else {
-			logger.Warn("Не удалось извлечь hash из торрент файла в кэше: %v", err)
+			logger.Warn("Не удалось извлечь hash из торрент файла в кэше: %v", parseErr)
 		}
 	}
 
-	ch.stateMgr.DeleteUserState(chatId)
-	delete(ch.torrentFilesCache, chatId)
-
-	if newTorrentHash != "" {
-		logger.Debug("Запуск мониторинга торрента для пользователя %d, hash: %s", chatId, newTorrentHash)
-		ch.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, newTorrentHash)
-	} else {
-		logger.Warn("Hash не получен, переход в главное меню для пользователя %d", chatId)
-		if ch.cmdHdlr != nil {
-			ch.cmdHdlr.ShowMainMenu(chatId)
-		}
-	}
+	ch.finalizeTorrentFlow(ctx, chatId, clientID, newTorrentHash)
 }
 
 func truncatePath(path string, maxLen int) string {

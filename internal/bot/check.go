@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/rutracker"
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
@@ -20,8 +21,8 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	if err != nil {
 		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
 		errorText := "❌ Ошибка при получении данных клиента"
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-		if err == nil {
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
 
@@ -31,8 +32,8 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	if client == nil {
 		logger.Warn("Пользователь %d попытался проверить несуществующий клиент %d", chatId, clientID)
 		errorText := "❌ Клиент не найден или у вас нет доступа"
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-		if err == nil {
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 		}
 
@@ -55,9 +56,9 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	if err != nil {
 		logger.Error("Ошибка при подключении к qBit клиенту %s для пользователя %d: %v", client.Name, chatId, err)
 		errorText := fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*:\n`%v`", client.Name, err)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-		if err == nil {
-			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+		msgID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		if sendErr == nil {
+			ch.stateMgr.SetMenuMessage(chatId, msgID)
 		}
 
 		return
@@ -76,9 +77,9 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	if err != nil {
 		logger.Error("Ошибка при получении торрентов от клиента %s для пользователя %d: %v", client.Name, chatId, err)
 		errorText := fmt.Sprintf("❌ Ошибка при получении торрентов от клиента *%s*:\n`%v`", client.Name, err)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-		if err == nil {
-			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+		msgID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		if sendErr == nil {
+			ch.stateMgr.SetMenuMessage(chatId, msgID)
 		}
 
 		return
@@ -97,9 +98,9 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	if err != nil {
 		logger.Error("Ошибка при фильтрации торрентов от клиента %s для пользователя %d: %v", client.Name, chatId, err)
 		errorText := fmt.Sprintf("❌ Ошибка при фильтрации торрентов от клиента *%s*:\n`%v`", client.Name, err)
-		newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-		if err == nil {
-			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+		msgID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+		if sendErr == nil {
+			ch.stateMgr.SetMenuMessage(chatId, msgID)
 		}
 
 		return
@@ -127,9 +128,9 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 		if err != nil {
 			logger.Error("Ошибка при проверке хешей в API рутрекера для клиента %s для пользователя %d: %v", client.Name, chatId, err)
 			errorText := fmt.Sprintf("❌ Ошибка при проверке хешей в API рутрекера от клиента *%s*:\n`%v`", client.Name, err)
-			newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
-			if err == nil {
-				ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+			msgID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
+			if sendErr == nil {
+				ch.stateMgr.SetMenuMessage(chatId, msgID)
 			}
 
 			return
@@ -146,49 +147,7 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	if count == 0 {
 		resultText = fmt.Sprintf("✅ *%s*\n\n📊 Активных торрентов: *%d*\n\n⏱ Время выполнения: *%s*\n\nНет активных торрентов", client.Name, count, durationText)
 	} else {
-		foundCount := 0
-		for _, topicID := range rutrackerResults {
-			if topicID != nil {
-				foundCount++
-			}
-		}
-
-		type missingTorrentInfo struct {
-			name string
-			hash string
-			url  string
-		}
-		var missingTorrentsInfo []missingTorrentInfo
-		if rutrackerResults != nil {
-			for hash, torrent := range torrentByHash {
-				topicID, exists := rutrackerResults[hash]
-				if !exists || topicID == nil {
-					props, err := qbClient.GetTorrentPropertiesCached(ctx, torrent.Hash)
-					url := ""
-					if err == nil && props != nil {
-						url = extractURLFromComment(props.Comment)
-					}
-					missingTorrentsInfo = append(missingTorrentsInfo, missingTorrentInfo{
-						name: torrent.Name,
-						hash: hash,
-						url:  url,
-					})
-				}
-			}
-		} else {
-			for hash, torrent := range torrentByHash {
-				props, err := qbClient.GetTorrentPropertiesCached(ctx, torrent.Hash)
-				url := ""
-				if err == nil && props != nil {
-					url = extractURLFromComment(props.Comment)
-				}
-				missingTorrentsInfo = append(missingTorrentsInfo, missingTorrentInfo{
-					name: torrent.Name,
-					hash: hash,
-					url:  url,
-				})
-			}
-		}
+		foundCount, missingTorrentsInfo := processRutrackerResults(ctx, qbClient, torrentByHash, rutrackerResults)
 
 		resultText = fmt.Sprintf("💻 *%s*\n\n📊 Активных торрентов: *%d*\n\n🔍 Отфильтровано по rutracker: *%d*\n\n✅ Актуальных: *%d*/*%d*\n\n", client.Name, len(activeTorrents), count, foundCount, count)
 
@@ -221,8 +180,8 @@ func (ch *ClientHandler) CheckClientTorrents(chatId int64, clientID int64) {
 	}
 
 	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("🔄 Повторить проверку", fmt.Sprintf("recheck_client_%d", clientID)),
-		tgbotapi.NewInlineKeyboardButtonData("🏠 В главное меню", "main_menu"),
+		ui.ButtonWithData(ui.RepeatCheck, fmt.Sprintf("recheck_client_%d", clientID)),
+		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
