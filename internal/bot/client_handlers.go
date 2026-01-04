@@ -346,15 +346,9 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 					}
 				}
 			}
-
-			maxTorrents := 3
-			if len(sortedTorrents) < maxTorrents {
-				maxTorrents = len(sortedTorrents)
-			}
-
+			// Build full list of monitor items (we'll paginate the view).
 			var monitorItems []TorrentMonitorItem
-			for i := 0; i < maxTorrents; i++ {
-				torrent := sortedTorrents[i]
+			for _, torrent := range sortedTorrents {
 				hash := torrent.InfohashV1
 				if hash == "" {
 					hash = torrent.InfohashV2
@@ -373,39 +367,9 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 					Torrents: monitorItems,
 				}
 
+				// show first page (page 0)
 				ch.stateMgr.SetUserState(chatId, fmt.Sprintf("monitor_torrent_hash_%d", clientID))
-				text := "📊 *Мониторинг торрента*\n\nВыберите торрент или введите хеш вручную:"
-				var rows [][]tgbotapi.InlineKeyboardButton
-
-				for i, item := range monitorItems {
-					name := item.Name
-					if len(name) > 40 {
-						name = name[:37] + "..."
-					}
-					rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-						ui.Data(
-							fmt.Sprintf("📁 %s", name),
-							fmt.Sprintf("monitor_torrent_hash_btn_%d_%d", clientID, i),
-						),
-					))
-				}
-
-				rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-					ui.ButtonWithData(ui.ManualHashInput, fmt.Sprintf("monitor_torrent_manual_%d", clientID)),
-				))
-				rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-					ui.ButtonWithData(ui.Cancel, "main_menu"),
-				))
-
-				keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-				messageID := ch.stateMgr.GetMenuMessage(chatId)
-				newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-				if sendErr != nil {
-					logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, sendErr)
-
-					return
-				}
-				ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+				ch.ShowTorrentMonitorPage(chatId, clientID, 0)
 
 				return
 			}
@@ -413,6 +377,86 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 	}
 
 	ch.StartTorrentMonitorManualInput(chatId, clientID)
+}
+
+// ShowTorrentMonitorPage renders a page of torrents for monitoring selection.
+func (ch *ClientHandler) ShowTorrentMonitorPage(chatId int64, clientID int64, page int) {
+	cache, exists := ch.torrentMonitorCache[chatId]
+	if !exists || cache == nil || cache.ClientID != clientID || len(cache.Torrents) == 0 {
+		logger.Warn("Кэш торрентов для мониторинга не найден для пользователя %d", chatId)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные не найдены. Начните заново.", nil)
+
+		return
+	}
+
+	ctx := context.Background()
+	// determine page size from user's recommended torrents setting (default 3)
+	pageSize := 3
+	if cnt, err := ch.repo.GetRecommendedTorrents(ctx, chatId); err == nil && cnt > 0 {
+		pageSize = cnt
+	}
+
+	total := len(cache.Torrents)
+	maxPage := (total - 1) / pageSize
+	if page < 0 {
+		page = 0
+	}
+	if page > maxPage {
+		page = maxPage
+	}
+
+	text := "📊 *Мониторинг торрента*\n\nВыберите торрент или введите хеш вручную:"
+	var rows [][]tgbotapi.InlineKeyboardButton
+
+	start := page * pageSize
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	for i := start; i < end; i++ {
+		item := cache.Torrents[i]
+		name := item.Name
+		if len(name) > 40 {
+			name = name[:37] + "..."
+		}
+		// use global index in callback so handler can find correct hash
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			ui.Data(
+				fmt.Sprintf("📁 %s", name),
+				fmt.Sprintf("monitor_torrent_hash_btn_%d_%d", clientID, i),
+			),
+		))
+	}
+
+	// pagination buttons
+	var navRow []tgbotapi.InlineKeyboardButton
+	if page > 0 {
+		navRow = append(navRow, ui.ButtonWithData(ui.PrevPage, fmt.Sprintf("monitor_torrent_page_%d_%d", clientID, page-1)))
+	}
+	if page < maxPage {
+		navRow = append(navRow, ui.ButtonWithData(ui.NextPage, fmt.Sprintf("monitor_torrent_page_%d_%d", clientID, page+1)))
+	}
+	if len(navRow) > 0 {
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(navRow...))
+	}
+
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		ui.ButtonWithData(ui.ManualHashInput, fmt.Sprintf("monitor_torrent_manual_%d", clientID)),
+	))
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		ui.ButtonWithData(ui.Cancel, "main_menu"),
+	))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
+	messageID := ch.stateMgr.GetMenuMessage(chatId)
+	newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if sendErr != nil {
+		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, sendErr)
+
+		return
+	}
+	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
 func (ch *ClientHandler) StartTorrentMonitorManualInput(chatId int64, clientID int64) {

@@ -31,14 +31,21 @@ func (tms *torrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 
 	client, err := tms.repo.GetClientByID(ctx, clientID, chatId)
 	if err == nil && client != nil {
-		text := fmt.Sprintf("✅ *\n\nКлиент: *%s*\n\n⏳ Обработка...", client.Name)
+		text := fmt.Sprintf("✅\n\nКлиент: *%s*\n\n⏳ Обработка...", textutil.EscapeMarkdown(client.Name))
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tms.getMenuMessage(chatId)
-		_, _ = tms.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		newMessageID, _ := tms.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		if newMessageID != 0 && newMessageID != messageID {
+			tms.setMenuMessage(chatId, newMessageID)
+			monitor.MessageID = newMessageID
+		} else {
+			// If SendOrEdit didn't return a new id, keep the current one.
+			monitor.MessageID = messageID
+		}
 	}
 
 	go tms.monitorTorrentProgress(ctx, monitor)
@@ -103,14 +110,17 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 
 	if torrent == nil {
 		logger.Debug("Торрент не найден для мониторинга, hash: %s, продолжаем попытки...", monitor.Hash)
-		text := fmt.Sprintf("✅ \n\nКлиент: *%s*\n\n⏳ Торрент обрабатывается qBittorrent...\n\n_Обработка..._", client.Name)
+		text := fmt.Sprintf("✅\n\nКлиент: *%s*\n\n⏳ Торрент обрабатывается qBittorrent...\n\n_Обработка..._", textutil.EscapeMarkdown(client.Name))
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
 			),
 		)
 		messageID := tms.getMenuMessage(monitor.ChatID)
-		_, _ = tms.msgSender.SendOrEdit(monitor.ChatID, messageID, text, &keyboard)
+		newMessageID, _ := tms.msgSender.SendOrEdit(monitor.ChatID, messageID, text, &keyboard)
+		if newMessageID != 0 && newMessageID != messageID {
+			tms.setMenuMessage(monitor.ChatID, newMessageID)
+		}
 
 		return
 	}
@@ -131,38 +141,78 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 			tgbotapi.NewInlineKeyboardButtonURL("🔗 Открыть раздачу", torrentURL),
 		))
 	}
+	// Determine whether torrent is actively transferring. If active, show Pause;
+	// otherwise show Resume. Treat only downloading/uploading/metaDL/forcedDL as active.
+	stateStr := string(torrent.State)
+	lowerState := strings.ToLower(stateStr)
+	isActive := lowerState == "downloading" || lowerState == "uploading" || lowerState == "metadl" || strings.HasPrefix(lowerState, "forced")
+	if isActive {
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			ui.ButtonWithData(ui.PauseTorrent, fmt.Sprintf("monitor_pause_%d_%s", monitor.ClientID, monitor.Hash)),
+		))
+	} else {
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			ui.ButtonWithData(ui.ResumeTorrent, fmt.Sprintf("monitor_resume_%d_%s", monitor.ClientID, monitor.Hash)),
+		))
+	}
+
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		ui.Button(ui.BackToTorrents),
 		ui.Button(ui.MainMenu),
 	))
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
 
+	// Ensure we only update the message that belongs to this monitoring session.
+	// If the user's current menu message differs, it means the user navigated
+	// away and we must not override their view.
+	currentMenuMsgID := tms.getMenuMessage(monitor.ChatID)
+	if currentMenuMsgID != 0 && monitor.MessageID != 0 && currentMenuMsgID != monitor.MessageID {
+		// User left the monitoring menu — skip updating to avoid returning them back.
+		logger.Debug("User %d left monitoring menu (menu msg id changed from %d to %d), skipping update", monitor.ChatID, monitor.MessageID, currentMenuMsgID)
+
+		return
+	}
+
 	messageID := tms.getMenuMessage(monitor.ChatID)
-	_, err = tms.msgSender.SendOrEdit(monitor.ChatID, messageID, text, &keyboard)
+	newMessageID, err := tms.msgSender.SendOrEdit(monitor.ChatID, messageID, text, &keyboard)
 	if err != nil {
 		logger.Warn("Ошибка при обновлении прогресса торрента: %v", err)
+	}
+	if newMessageID != 0 && newMessageID != messageID {
+		tms.setMenuMessage(monitor.ChatID, newMessageID)
+		monitor.MessageID = newMessageID
 	}
 }
 
 func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Torrent, clientName string, numPeers int) string {
 	var status string
 	var progress float64
-
 	switch torrent.State {
 	case "downloading":
 		status = "⬇️ Загрузка"
 		progress = torrent.Progress * 100
-	case "uploading", "stalledUP":
+	case "uploading":
 		status = "⬆️ Раздача"
+		// uploading reported progress may be 1.0, but keep using 100% for clarity
 		progress = 100.0
+	case "stalledUP":
+		status = "⚠️ Раздача (застой)"
+		progress = torrent.Progress * 100
+	case "stalledDL":
+		status = "⚠️ Загрузка (застой)"
+		progress = torrent.Progress * 100
 	case "checkingUP", "checkingDL", "checkingResumeData":
 		status = "🔍 Проверка"
 		progress = torrent.Progress * 100
 	case "queuedUP", "queuedDL":
 		status = "⏳ В очереди"
 		progress = torrent.Progress * 100
-	case "pausedUP", "pausedDL":
+	case "pausedUP", "pausedDL", "stoppedUP", "stoppedDL":
 		status = "⏸ Остановлен"
+		progress = torrent.Progress * 100
+	case "metaDL":
+		status = "⬇️ Получение метаданных"
 		progress = torrent.Progress * 100
 	case "error":
 		status = "❌ Ошибка"
@@ -171,6 +221,7 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 		status = "⚠️ Отсутствуют файлы"
 		progress = torrent.Progress * 100
 	default:
+		// Fallback: show original state string prefixed with info emoji.
 		status = "ℹ️ " + string(torrent.State)
 		progress = torrent.Progress * 100
 	}
@@ -200,8 +251,8 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 	}
 
 	text := "📊 *Прогресс торрента*\n\n"
-	text += fmt.Sprintf("Клиент: *%s*\n\n", clientName)
-	text += fmt.Sprintf("📁 *%s*\n\n", torrent.Name)
+	text += fmt.Sprintf("Клиент: *%s*\n\n", textutil.EscapeMarkdown(clientName))
+	text += fmt.Sprintf("📁 *%s*\n\n", textutil.EscapeMarkdown(torrent.Name))
 	text += fmt.Sprintf("Статус: %s\n", status)
 	text += fmt.Sprintf("Прогресс: *%.1f%%*\n\n", progress)
 	text += fmt.Sprintf("⬇️ Загрузка: %s\n", formatSpeed(torrent.DlSpeed))

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"cws/internal/bot/ui"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
 	"strconv"
@@ -43,6 +44,25 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	_, _ = ch.bot.Request(callback)
 
 	switch {
+	case data == "monitor_torrent_stop":
+		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
+		ch.clientHdlr.ShowClientsForTorrentMonitor(chatId)
+	case data == "back_to_torrents":
+		// stop active monitoring first
+		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
+
+		// try to restore client ID from user state if available and show its torrents,
+		// otherwise show clients list
+		if state, ok := ch.stateMgr.GetUserState(chatId); ok && strings.HasPrefix(state, "monitor_torrent_hash_") {
+			clientIDStr := strings.TrimPrefix(state, "monitor_torrent_hash_")
+			if clientID, err := strconv.ParseInt(clientIDStr, 10, 64); err == nil {
+				ch.clientHdlr.StartTorrentMonitorDialog(chatId, clientID)
+
+				return
+			}
+		}
+
+		ch.clientHdlr.ShowClientsForTorrentMonitor(chatId)
 	case data == "main_menu":
 		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
 		if ch.cmdHdlr != nil {
@@ -68,6 +88,28 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.clientHdlr.ShowClientsForTorrentAdd(chatId)
 	case data == "monitor_torrent":
 		ch.clientHdlr.ShowClientsForTorrentMonitor(chatId)
+	case data == "settings":
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.ShowSettingsMenu(chatId)
+		}
+	case data == "variables":
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.ShowVariablesMenu(chatId)
+		}
+	case data == "edit_recommended_torrents_input":
+		// Start dialog for custom input
+		ch.stateMgr.SetUserState(chatId, "edit_recommended_torrents_input")
+		text := "✏️ Введите число рекомендуемых торрентов для отображения на странице выбора мониторинга (например: 3):"
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				ui.ButtonWithData(ui.Cancel, "variables"),
+			),
+		)
+		messageID := ch.stateMgr.GetDialogMessage(chatId)
+		newMessageID, _ := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+		if newMessageID != 0 {
+			ch.stateMgr.SetDialogMessage(chatId, newMessageID)
+		}
 	case data == "search_torrent":
 		ch.clientHdlr.torrentSearchSvc.StartTorrentSearchDialog(chatId)
 	case strings.HasPrefix(data, "search_torrent_select_"):
@@ -82,6 +124,31 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		}
 		logger.Debugf("Пользователь %d запросил страницу %d результатов поиска", chatId, page)
 		ch.clientHdlr.torrentSearchSvc.ShowSearchResultsPage(chatId, page)
+	case strings.HasPrefix(data, "monitor_torrent_page_"):
+		// Format: monitor_torrent_page_{clientID}_{page}
+		rest := strings.TrimPrefix(data, "monitor_torrent_page_")
+		parts := strings.SplitN(rest, "_", 2)
+		if len(parts) != 2 {
+			logger.Warn("Пользователь %d отправил неверный формат страницы мониторинга: %s", chatId, data)
+
+			return
+		}
+		clientIDStr := parts[0]
+		pageStr := parts[1]
+		clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+		if err != nil {
+			logger.Warn("Пользователь %d отправил неверный ID клиента для страницы мониторинга: %s", chatId, clientIDStr)
+
+			return
+		}
+		page, err := strconv.Atoi(pageStr)
+		if err != nil {
+			logger.Warn("Пользователь %d отправил неверный номер страницы мониторинга: %s", chatId, pageStr)
+
+			return
+		}
+		logger.Debugf("Пользователь %d запросил страницу %d списка торрентов для клиента %d", chatId, page, clientID)
+		ch.clientHdlr.ShowTorrentMonitorPage(chatId, clientID, page)
 	case data == "add_client":
 		logger.Debugf("Пользователь %d начал добавление нового клиента", chatId)
 		ch.dialogHdlr.StartAddClientDialog(chatId)
@@ -154,6 +221,16 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.handleMonitorTorrentHashButton(chatId, data)
 	case strings.HasPrefix(data, "monitor_torrent_manual_"):
 		ch.handleMonitorTorrentManual(chatId, data)
+	case strings.HasPrefix(data, "monitor_pause_"):
+		ch.handleMonitorPause(chatId, data)
+	case strings.HasPrefix(data, "monitor_resume_"):
+		ch.handleMonitorResume(chatId, data)
+	case data == "edit_recommended_torrents":
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.ShowEditRecommendedTorrents(chatId)
+		}
+	case strings.HasPrefix(data, "set_recommended_torrents_"):
+		ch.handleSetRecommendedTorrents(chatId, data)
 	}
 }
 
@@ -239,6 +316,103 @@ func (ch *CallbackHandler) handleMonitorTorrentManual(chatId int64, data string)
 	}
 	logger.Debugf("Пользователь %d выбрал ручной ввод хеша для клиента %d", chatId, clientID)
 	ch.clientHdlr.StartTorrentMonitorManualInput(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleMonitorPause(chatId int64, data string) {
+	// Format: monitor_pause_{clientID}_{hash}
+	prefix := "monitor_pause_"
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Invalid monitor pause callback format from user %d: %s", chatId, data)
+
+		return
+	}
+
+	clientIDStr := parts[0]
+	hash := parts[1]
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Invalid client ID in monitor pause callback from user %d: %s", chatId, clientIDStr)
+
+		return
+	}
+
+	ctx := context.Background()
+	qbClient, _, ok := ch.clientHdlr.getQbClientByIDOrReply(ctx, chatId, clientID)
+	if !ok {
+		return
+	}
+
+	if err = qbClient.PauseTorrent(ctx, hash); err != nil {
+		logger.Error("Error pausing torrent %s for user %d: %v", hash, chatId, err)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при остановке торрента", nil)
+
+		return
+	}
+	// No UI confirmation — monitoring will refresh the view itself.
+}
+
+func (ch *CallbackHandler) handleMonitorResume(chatId int64, data string) {
+	// Format: monitor_resume_{clientID}_{hash}
+	prefix := "monitor_resume_"
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Invalid monitor resume callback format from user %d: %s", chatId, data)
+
+		return
+	}
+
+	clientIDStr := parts[0]
+	hash := parts[1]
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Invalid client ID in monitor resume callback from user %d: %s", chatId, clientIDStr)
+
+		return
+	}
+
+	ctx := context.Background()
+	qbClient, _, ok := ch.clientHdlr.getQbClientByIDOrReply(ctx, chatId, clientID)
+	if !ok {
+		return
+	}
+
+	if err = qbClient.ResumeTorrent(ctx, hash); err != nil {
+		logger.Error("Error resuming torrent %s for user %d: %v", hash, chatId, err)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при запуске торрента", nil)
+
+		return
+	}
+	// No UI confirmation — monitoring will refresh the view itself.
+}
+
+func (ch *CallbackHandler) handleSetRecommendedTorrents(chatId int64, data string) {
+	// Format: set_recommended_torrents_{n}
+	prefix := "set_recommended_torrents_"
+	if !strings.HasPrefix(data, prefix) {
+		return
+	}
+	nStr := strings.TrimPrefix(data, prefix)
+	n, err := strconv.Atoi(nStr)
+	if err != nil {
+		logger.Warn("Invalid recommended torrents value from user %d: %s", chatId, nStr)
+
+		return
+	}
+
+	ctx := context.Background()
+	if err = ch.clientHdlr.repo.SetRecommendedTorrents(ctx, chatId, n); err != nil {
+		logger.Error("Failed to save recommended torrents for user %d: %v", chatId, err)
+
+		return
+	}
+
+	// After saving, show variables menu again to reflect new value.
+	if ch.cmdHdlr != nil {
+		ch.cmdHdlr.ShowVariablesMenu(chatId)
+	}
 }
 
 func (ch *CallbackHandler) handleSearchTorrentSelect(chatId int64, data string) {

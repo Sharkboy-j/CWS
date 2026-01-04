@@ -16,6 +16,11 @@ type TorrentMonitor struct {
 	ClientID int64
 	Hash     string
 	Stop     chan bool
+	// MessageID holds the menu message id that this monitor is allowed to update.
+	// If the user's menu message id changes (user navigated away), the monitor
+	// will stop updating the UI to avoid returning the user back to monitoring.
+	// race condition bug fix after user cancelled the monitoring dialog
+	MessageID int
 }
 
 type torrentMonitorService struct {

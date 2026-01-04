@@ -103,6 +103,98 @@ func (s *service) ResumeAllTorrents(ctx context.Context) error {
 	return nil
 }
 
+func (s *service) PauseTorrent(ctx context.Context, hash string) error {
+	logger.Debugf("Pausing torrent %s", hash)
+
+	apiURL := fmt.Sprintf("%s/api/v2/torrents/stop", s.baseURL)
+	data := url.Values{}
+	data.Set("hashes", hash)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		logger.Error("Error creating pause request: %v", err)
+
+		return fmt.Errorf("failed to create pause request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", s.baseURL+"/")
+	req.Header.Set("Origin", s.baseURL)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		logger.Error("Error pausing torrent: %v", err)
+
+		return fmt.Errorf("failed to pause torrent: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("Error reading pause response: %v", err)
+
+		return fmt.Errorf("failed to read pause response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Error("Error pausing torrent %s: status %d, response: %s", hash, resp.StatusCode, string(body))
+
+		return fmt.Errorf("pause failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	logger.Infof("Torrent %s paused successfully", hash)
+
+	return nil
+}
+
+func (s *service) ResumeTorrent(ctx context.Context, hash string) error {
+	logger.Debugf("Resuming torrent %s", hash)
+
+	apiURL := fmt.Sprintf("%s/api/v2/torrents/start", s.baseURL)
+	data := url.Values{}
+	data.Set("hashes", hash)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		logger.Error("Error creating resume request: %v", err)
+
+		return fmt.Errorf("failed to create resume request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", s.baseURL+"/")
+	req.Header.Set("Origin", s.baseURL)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		logger.Error("Error resuming torrent: %v", err)
+
+		return fmt.Errorf("failed to resume torrent: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("Error reading resume response: %v", err)
+
+		return fmt.Errorf("failed to read resume response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Error("Error resuming torrent %s: status %d, response: %s", hash, resp.StatusCode, string(body))
+
+		return fmt.Errorf("resume failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	logger.Infof("Torrent %s resumed successfully", hash)
+
+	return nil
+}
+
 func (s *service) SetGlobalSpeedLimits(ctx context.Context, downloadLimit, uploadLimit int64) error {
 	logger.Debug("Setting global speed limits: download=%d bytes/s, upload=%d bytes/s", downloadLimit, uploadLimit)
 

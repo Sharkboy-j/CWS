@@ -20,22 +20,26 @@ const (
 	Cancel   ButtonID = "cancel"
 	Back     ButtonID = "back"
 
-	AddClient         ButtonID = "add_client"
-	RepeatCheck       ButtonID = "repeat_check"
-	NewSearch         ButtonID = "new_search"
-	PrevPage          ButtonID = "prev_page"
-	NextPage          ButtonID = "next_page"
-	Yes               ButtonID = "yes"
-	No                ButtonID = "no"
-	CheckTorrents     ButtonID = "check_torrents"
-	QuickActionsMenu  ButtonID = "quick_actions_menu"
-	ClientsMenu       ButtonID = "clients_menu"
-	AddTorrentFile    ButtonID = "add_torrent_file"
-	SearchTorrent     ButtonID = "search_torrent"
-	MonitorTorrent    ButtonID = "monitor_torrent"
-	PauseAllTorrents  ButtonID = "pause_all_torrents"
-	ResumeAllTorrents ButtonID = "resume_all_torrents"
-	SpeedLimitMenu    ButtonID = "speed_limit_menu"
+	AddClient           ButtonID = "add_client"
+	RepeatCheck         ButtonID = "repeat_check"
+	NewSearch           ButtonID = "new_search"
+	PrevPage            ButtonID = "prev_page"
+	NextPage            ButtonID = "next_page"
+	Yes                 ButtonID = "yes"
+	No                  ButtonID = "no"
+	CheckTorrents       ButtonID = "check_torrents"
+	QuickActionsMenu    ButtonID = "quick_actions_menu"
+	ClientsMenu         ButtonID = "clients_menu"
+	AddTorrentFile      ButtonID = "add_torrent_file"
+	SearchTorrent       ButtonID = "search_torrent"
+	MonitorTorrent      ButtonID = "monitor_torrent"
+	BackToTorrents      ButtonID = "back_to_torrents"
+	PauseAllTorrents    ButtonID = "pause_all_torrents"
+	ResumeAllTorrents   ButtonID = "resume_all_torrents"
+	SpeedLimitMenu      ButtonID = "speed_limit_menu"
+	SettingsMenu        ButtonID = "settings_menu"
+	Variables           ButtonID = "variables"
+	RecommendedTorrents ButtonID = "recommended_torrents"
 
 	Speed10       ButtonID = "speed_10"
 	Speed100      ButtonID = "speed_100"
@@ -59,6 +63,8 @@ const (
 	SkipHashNo      ButtonID = "skip_hash_no"
 	DeleteFilesYes  ButtonID = "delete_files_yes"
 	DeleteFilesNo   ButtonID = "delete_files_no"
+	PauseTorrent    ButtonID = "pause_torrent"
+	ResumeTorrent   ButtonID = "resume_torrent"
 )
 
 type buttonResource struct {
@@ -173,6 +179,13 @@ var buttonResources = map[ButtonID]buttonResource{
 			LocaleEN: "📊 Torrent monitoring",
 		},
 	},
+	BackToTorrents: {
+		data: "back_to_torrents",
+		text: map[Locale]string{
+			LocaleRU: "🔙 К списку торрентов",
+			LocaleEN: "🔙 Back to torrents",
+		},
+	},
 	PauseAllTorrents: {
 		data: "quick_action_pause_all",
 		text: map[Locale]string{
@@ -194,27 +207,44 @@ var buttonResources = map[ButtonID]buttonResource{
 			LocaleEN: "🚦 Speed limit",
 		},
 	},
-	Speed10:         {data: "quick_action_limit_speed_10", text: map[Locale]string{LocaleRU: "0.10 МБ/с", LocaleEN: "0.10 MB/s"}},
-	Speed100:        {data: "quick_action_limit_speed_100", text: map[Locale]string{LocaleRU: "1.00 МБ/с", LocaleEN: "1.00 MB/s"}},
-	Speed500:        {data: "quick_action_limit_speed_500", text: map[Locale]string{LocaleRU: "5.00 МБ/с", LocaleEN: "5.00 MB/s"}},
-	Speed1000:       {data: "quick_action_limit_speed_1000", text: map[Locale]string{LocaleRU: "10.00 МБ/с", LocaleEN: "10.00 MB/s"}},
-	Speed2000:       {data: "quick_action_limit_speed_2000", text: map[Locale]string{LocaleRU: "20.00 МБ/с", LocaleEN: "20.00 MB/s"}},
-	Speed5000:       {data: "quick_action_limit_speed_5000", text: map[Locale]string{LocaleRU: "50.00 МБ/с", LocaleEN: "50.00 MB/s"}},
-	Speed10000:      {data: "quick_action_limit_speed_10000", text: map[Locale]string{LocaleRU: "100.00 МБ/с", LocaleEN: "100.00 MB/s"}},
-	Speed50000:      {data: "quick_action_limit_speed_50000", text: map[Locale]string{LocaleRU: "500.00 МБ/с", LocaleEN: "500.00 MB/s"}},
-	SpeedCustom:     {data: "quick_action_limit_speed_custom", text: map[Locale]string{LocaleRU: "✏ Ввести вручную", LocaleEN: "✏ Enter manually"}},
-	SpeedRemove:     {data: "quick_action_remove_speed_limits", text: map[Locale]string{LocaleRU: "🚫 Убрать все ограничения", LocaleEN: "🚫 Remove limits"}},
-	Edit:            {text: map[Locale]string{LocaleRU: "✏️ Изменить", LocaleEN: "✏️ Edit"}},
-	Delete:          {text: map[Locale]string{LocaleRU: "🗑 Удалить", LocaleEN: "🗑 Delete"}},
-	BackToList:      {data: "clients", text: map[Locale]string{LocaleRU: "🔙 Назад к списку", LocaleEN: "🔙 Back to list"}},
-	ConfirmDelete:   {text: map[Locale]string{LocaleRU: "✅ Да, удалить", LocaleEN: "✅ Yes, delete"}},
-	KeepExisting:    {text: map[Locale]string{LocaleRU: "❌ Нет, оставить", LocaleEN: "❌ No, keep"}},
-	ManualHashInput: {text: map[Locale]string{LocaleRU: "✏️ Ввести хеш вручную", LocaleEN: "✏️ Enter hash manually"}},
-	ManualPathInput: {text: map[Locale]string{LocaleRU: "✏️ Ввести путь вручную", LocaleEN: "✏️ Enter path manually"}},
-	SkipHashYes:     {text: map[Locale]string{LocaleRU: "✅ Да, пропустить", LocaleEN: "✅ Yes, skip"}},
-	SkipHashNo:      {text: map[Locale]string{LocaleRU: "❌ Нет, проверить", LocaleEN: "❌ No, check"}},
-	DeleteFilesYes:  {text: map[Locale]string{LocaleRU: "✅ Да, удалить файлы", LocaleEN: "✅ Yes, delete files"}},
-	DeleteFilesNo:   {text: map[Locale]string{LocaleRU: "❌ Нет, только торрент", LocaleEN: "❌ No, torrent only"}},
+	Speed10:             {data: "quick_action_limit_speed_10", text: map[Locale]string{LocaleRU: "0.10 МБ/с", LocaleEN: "0.10 MB/s"}},
+	Speed100:            {data: "quick_action_limit_speed_100", text: map[Locale]string{LocaleRU: "1.00 МБ/с", LocaleEN: "1.00 MB/s"}},
+	Speed500:            {data: "quick_action_limit_speed_500", text: map[Locale]string{LocaleRU: "5.00 МБ/с", LocaleEN: "5.00 MB/s"}},
+	Speed1000:           {data: "quick_action_limit_speed_1000", text: map[Locale]string{LocaleRU: "10.00 МБ/с", LocaleEN: "10.00 MB/s"}},
+	Speed2000:           {data: "quick_action_limit_speed_2000", text: map[Locale]string{LocaleRU: "20.00 МБ/с", LocaleEN: "20.00 MB/s"}},
+	Speed5000:           {data: "quick_action_limit_speed_5000", text: map[Locale]string{LocaleRU: "50.00 МБ/с", LocaleEN: "50.00 MB/s"}},
+	Speed10000:          {data: "quick_action_limit_speed_10000", text: map[Locale]string{LocaleRU: "100.00 МБ/с", LocaleEN: "100.00 MB/s"}},
+	Speed50000:          {data: "quick_action_limit_speed_50000", text: map[Locale]string{LocaleRU: "500.00 МБ/с", LocaleEN: "500.00 MB/s"}},
+	SpeedCustom:         {data: "quick_action_limit_speed_custom", text: map[Locale]string{LocaleRU: "✏ Ввести вручную", LocaleEN: "✏ Enter manually"}},
+	SpeedRemove:         {data: "quick_action_remove_speed_limits", text: map[Locale]string{LocaleRU: "🚫 Убрать все ограничения", LocaleEN: "🚫 Remove limits"}},
+	Edit:                {text: map[Locale]string{LocaleRU: "✏️ Изменить", LocaleEN: "✏️ Edit"}},
+	Delete:              {text: map[Locale]string{LocaleRU: "🗑 Удалить", LocaleEN: "🗑 Delete"}},
+	BackToList:          {data: "clients", text: map[Locale]string{LocaleRU: "🔙 Назад к списку", LocaleEN: "🔙 Back to list"}},
+	ConfirmDelete:       {text: map[Locale]string{LocaleRU: "✅ Да, удалить", LocaleEN: "✅ Yes, delete"}},
+	KeepExisting:        {text: map[Locale]string{LocaleRU: "❌ Нет, оставить", LocaleEN: "❌ No, keep"}},
+	ManualHashInput:     {text: map[Locale]string{LocaleRU: "✏️ Ввести хеш вручную", LocaleEN: "✏️ Enter hash manually"}},
+	ManualPathInput:     {text: map[Locale]string{LocaleRU: "✏️ Ввести путь вручную", LocaleEN: "✏️ Enter path manually"}},
+	SettingsMenu:        {data: "settings", text: map[Locale]string{LocaleRU: "⚙️ Настройки", LocaleEN: "⚙️ Settings"}},
+	Variables:           {data: "variables", text: map[Locale]string{LocaleRU: "🔧 Переменные", LocaleEN: "🔧 Variables"}},
+	RecommendedTorrents: {data: "edit_recommended_torrents", text: map[Locale]string{LocaleRU: "📌 Рекомендуемое количество торрентов", LocaleEN: "📌 Recommended torrents count"}},
+	SkipHashYes:         {text: map[Locale]string{LocaleRU: "✅ Да, пропустить", LocaleEN: "✅ Yes, skip"}},
+	SkipHashNo:          {text: map[Locale]string{LocaleRU: "❌ Нет, проверить", LocaleEN: "❌ No, check"}},
+	DeleteFilesYes:      {text: map[Locale]string{LocaleRU: "✅ Да, удалить файлы", LocaleEN: "✅ Yes, delete files"}},
+	DeleteFilesNo:       {text: map[Locale]string{LocaleRU: "❌ Нет, только торрент", LocaleEN: "❌ No, torrent only"}},
+	PauseTorrent: {
+		data: "monitor_pause",
+		text: map[Locale]string{
+			LocaleRU: "⏸ Остановить раздачу",
+			LocaleEN: "⏸ Pause torrent",
+		},
+	},
+	ResumeTorrent: {
+		data: "monitor_resume",
+		text: map[Locale]string{
+			LocaleRU: "▶ Запустить раздачу",
+			LocaleEN: "▶ Resume torrent",
+		},
+	},
 }
 
 func Text(id ButtonID) string {

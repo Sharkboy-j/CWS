@@ -104,6 +104,8 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 		dh.handleTorrentSearchQuery(chatId, text)
 	case state == "custom_speed_limit":
 		dh.handleCustomSpeedLimit(chatId, text)
+	case state == "edit_recommended_torrents_input":
+		dh.handleEditRecommendedTorrentsInput(chatId, text)
 	default:
 		logger.Warn("Неизвестное состояние для пользователя %d: %s, текст: %s", chatId, state, text)
 		dh.stateMgr.DeleteUserState(chatId)
@@ -111,6 +113,46 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 	}
 }
 
+// handleEditRecommendedTorrentsInput processes custom numeric input for recommended torrents.
+func (dh *DialogHandler) handleEditRecommendedTorrentsInput(chatId int64, text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		messageText := "❌ Значение не может быть пустым. Введите число (например: 3):"
+		messageID := dh.stateMgr.GetDialogMessage(chatId)
+		_, _ = dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
+
+		return
+	}
+
+	n, err := strconv.Atoi(text)
+	if err != nil || n <= 0 || n > 100 {
+		messageText := "❌ Неверный формат или значение. Введите целое число от 1 до 100:"
+		messageID := dh.stateMgr.GetDialogMessage(chatId)
+		_, _ = dh.msgSender.SendOrEdit(chatId, messageID, messageText, nil)
+
+		return
+	}
+
+	ctx := context.Background()
+	if err = dh.repo.SetRecommendedTorrents(ctx, chatId, n); err != nil {
+		logger.Error("Ошибка при сохранении recommended_torrents для пользователя %d: %v", chatId, err)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при сохранении настройки. Попробуйте снова.", nil)
+
+		return
+	}
+
+	// Clear dialog state and message, then show variables menu.
+	dialogMessageID := dh.stateMgr.GetDialogMessage(chatId)
+	if dialogMessageID > 0 {
+		dh.msgSender.DeleteMessage(chatId, dialogMessageID)
+		dh.stateMgr.SetDialogMessage(chatId, 0)
+	}
+	dh.stateMgr.DeleteUserState(chatId)
+
+	if dh.cmdHdlr != nil {
+		dh.cmdHdlr.ShowVariablesMenuWithValue(chatId, n)
+	}
+}
 func (dh *DialogHandler) handleAddClientName(chatId int64, text, separator string) {
 	logger.Debugf("Пользователь %d ввел имя клиента: %s", chatId, text)
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("add_client_host%s%s", separator, text))
