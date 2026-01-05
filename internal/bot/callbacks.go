@@ -111,6 +111,19 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		if ch.cmdHdlr != nil {
 			ch.cmdHdlr.ShowSettingsMenu(chatId)
 		}
+	case data == "toggle_notifications":
+		ctx := context.Background()
+		enabled, err := ch.clientHdlr.repo.GetNotificationsEnabled(ctx, chatId)
+		if err != nil {
+			logger.Warn("Failed to read notifications_enabled for user %d: %v", chatId, err)
+			enabled = true
+		}
+		if setErr := ch.clientHdlr.repo.SetNotificationsEnabled(ctx, chatId, !enabled); setErr != nil {
+			logger.Warn("Failed to set notifications_enabled for user %d: %v", chatId, setErr)
+		}
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.ShowSettingsMenu(chatId)
+		}
 	case data == "variables":
 		if ch.cmdHdlr != nil {
 			ch.cmdHdlr.ShowVariablesMenu(chatId)
@@ -250,6 +263,14 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.handleConfirmDeleteTorrent(chatId, data)
 	case strings.HasPrefix(data, "monitor_torrent_client_"):
 		ch.handleMonitorTorrentClient(chatId, data)
+	case strings.HasPrefix(data, "monitor_torrent_start_"):
+		ch.handleMonitorTorrentStart(chatId, data)
+	case strings.HasPrefix(data, "monitor_from_missing_"):
+		hash := strings.TrimPrefix(data, "monitor_from_missing_")
+		hash = strings.TrimSpace(hash)
+		if hash != "" {
+			ch.clientHdlr.ShowClientsForTorrentMonitorWithHash(chatId, hash)
+		}
 	case strings.HasPrefix(data, "monitor_torrent_hash_btn_"):
 		ch.handleMonitorTorrentHashButton(chatId, data)
 	case strings.HasPrefix(data, "monitor_torrent_manual_"):
@@ -280,6 +301,32 @@ func (ch *CallbackHandler) handleMonitorTorrentClient(chatId int64, data string)
 	}
 	logger.Debugf("Пользователь %d выбрал клиента %d для мониторинга торрента", chatId, clientID)
 	ch.clientHdlr.StartTorrentMonitorDialog(chatId, clientID)
+}
+
+func (ch *CallbackHandler) handleMonitorTorrentStart(chatId int64, data string) {
+	rest := strings.TrimPrefix(data, "monitor_torrent_start_")
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Invalid monitor start callback format from user %d: %s", chatId, data)
+
+		return
+	}
+
+	clientID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		logger.Warn("Invalid client ID in monitor start callback from user %d: %s", chatId, parts[0])
+
+		return
+	}
+
+	hash := strings.TrimSpace(parts[1])
+	if hash == "" {
+		return
+	}
+
+	ctx := context.Background()
+	delete(ch.clientHdlr.torrentMonitorCache, chatId)
+	ch.clientHdlr.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, hash)
 }
 
 func (ch *CallbackHandler) handleMonitorTorrentHashButton(chatId int64, data string) {

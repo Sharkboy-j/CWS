@@ -15,6 +15,8 @@ import (
 type Service struct {
 	telegramService *telegram.BotService
 	autoChecker     *AutoChecker
+	notifyBot       *tgbotapi.BotAPI
+	repo            *storage.Repository
 }
 
 func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (*Service, error) {
@@ -43,12 +45,26 @@ func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (
 	msgSender := messaging.NewMessageSender(bot)
 
 	cmdHdlr := NewCommandHandler(bot, repo, stateMgr, msgSender)
-	clientHdlr := NewClientHandler(repo, msgSender, stateMgr, cfg)
+
+	var notifySender messaging.MessageSender
+	var notifyBot *tgbotapi.BotAPI
+	if cfg.TelegramMsgToken != "" {
+		nb, initErr := tgbotapi.NewBotAPI(cfg.TelegramMsgToken)
+		if initErr != nil {
+			return nil, fmt.Errorf("failed to init notification telegram bot: %w", initErr)
+		}
+		logger.Infof("notification telegram bot authorized as '%s'", nb.Self.UserName)
+		notifyBot = nb
+		notifySender = messaging.NewMessageSender(nb)
+	}
+
+	clientHdlr := NewClientHandler(repo, msgSender, notifySender, stateMgr, cfg, bot.Self.UserName)
 	dialogHdlr := NewDialogHandler(repo, msgSender, stateMgr, clientHdlr)
 	callbackHdlr := NewCallbackHandler(bot, stateMgr, msgSender, dialogHdlr, clientHdlr)
 	docHdlr := NewDocumentHandler(stateMgr, msgSender, clientHdlr)
 
 	clientHdlr.SetCommandHandler(cmdHdlr)
+	cmdHdlr.SetClientHandler(clientHdlr)
 	dialogHdlr.SetCommandHandler(cmdHdlr)
 	callbackHdlr.SetCommandHandler(cmdHdlr)
 
@@ -82,6 +98,8 @@ func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (
 	service := &Service{
 		telegramService: telegramService,
 		autoChecker:     ac,
+		notifyBot:       notifyBot,
+		repo:            repo,
 	}
 
 	logger.Debugf("Bot service initialized")
@@ -90,6 +108,10 @@ func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (
 }
 
 func (bs *Service) Start(ctx context.Context) error {
+	if bs.notifyBot != nil {
+		go StartNotifyBot(ctx, bs.notifyBot, bs.repo)
+	}
+
 	return bs.telegramService.Start(ctx)
 }
 

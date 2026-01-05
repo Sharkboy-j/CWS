@@ -18,6 +18,7 @@ type CommandHandler struct {
 	repo           *storage.Repository
 	stateMgr       *StateManager
 	msgSender      messaging.MessageSender
+	clientHdlr     *ClientHandler
 	isStartCommand bool // Track if current operation is from /start command
 }
 
@@ -30,12 +31,26 @@ func NewCommandHandler(bot *tgbotapi.BotAPI, repo *storage.Repository, stateMgr 
 	}
 }
 
+func (ch *CommandHandler) SetClientHandler(clientHdlr *ClientHandler) {
+	ch.clientHdlr = clientHdlr
+}
+
 func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
 	command := message.Command()
 	chatId := message.Chat.ID
+	args := message.CommandArguments()
 
 	switch command {
 	case "menu", "start":
+		if command == "start" && strings.HasPrefix(args, "monitor_") && ch.clientHdlr != nil {
+			hash := strings.TrimPrefix(args, "monitor_")
+			hash = strings.TrimSpace(hash)
+			if hash != "" {
+				ch.clientHdlr.ShowClientsForTorrentMonitorWithHash(chatId, hash)
+
+				return
+			}
+		}
 		ch.isStartCommand = true
 		ch.ShowMainMenu(chatId)
 		ch.isStartCommand = false
@@ -160,10 +175,27 @@ func (ch *CommandHandler) ShowSettingsMenu(chatId int64) {
 	logger.Debugf("Показ меню настроек для пользователя %d", chatId)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
+	ctx := context.Background()
+	enabled, err := ch.repo.GetNotificationsEnabled(ctx, chatId)
+	if err != nil {
+		logger.Warn("Failed to read notifications_enabled for user %d: %v", chatId, err)
+		enabled = true
+	}
+	label := "🔔 Уведомления: "
+	var status string
+	if enabled {
+		status = "ВКЛ"
+	} else {
+		status = "ВЫКЛ"
+	}
+
 	text := "⚙️ *Настройки*\n\nВыберите раздел настроек:"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.ClientsMenu),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Data(label+status, "toggle_notifications"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.Variables),

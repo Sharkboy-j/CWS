@@ -14,3 +14,10 @@ type Client struct {
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
 }
+
+type CheckUpdatesNotifyState struct {
+	MessageID     int
+	PayloadHash   string
+	MissingHashes string
+	ItemsJSON     string
+}

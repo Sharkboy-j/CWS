@@ -142,10 +142,15 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 		))
 	}
 	// Determine whether torrent is actively transferring. If active, show Pause;
-	// otherwise show Resume. Treat only downloading/uploading/metaDL/forcedDL as active.
+	// otherwise show Resume. Treat stalled states as active too (user can stop them).
 	stateStr := string(torrent.State)
 	lowerState := strings.ToLower(stateStr)
-	isActive := lowerState == "downloading" || lowerState == "uploading" || lowerState == "metadl" || strings.HasPrefix(lowerState, "forced")
+	isActive := lowerState == "downloading" ||
+		lowerState == "uploading" ||
+		lowerState == "stalledup" ||
+		lowerState == "stalleddl" ||
+		lowerState == "metadl" ||
+		strings.HasPrefix(lowerState, "forced")
 	if isActive {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.PauseTorrent, fmt.Sprintf("monitor_pause_%d_%s", monitor.ClientID, monitor.Hash)),

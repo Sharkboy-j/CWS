@@ -34,6 +34,7 @@ services:
       # Telegram и Rutracker настройки можно передать через environment или config.json
       # Переменные окружения имеют приоритет над config.json
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
+      - TELEGRAM_MSG_TOKEN=${TELEGRAM_MSG_TOKEN:-}
       - RUTRACKER_API_TOKEN=${RUTRACKER_API_TOKEN:-}
       - DURATION_SECONDS=${DURATION_SECONDS:-60}
       - ONLY_MANUAL_CHECK=${ONLY_MANUAL_CHECK:-false}

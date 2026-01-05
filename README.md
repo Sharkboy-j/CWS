@@ -48,6 +48,7 @@ cd CWS
 2. Создайте файл `.env` в корне проекта (или экспортируйте переменные окружения):
 ```bash
 TELEGRAM_TOKEN=your_telegram_bot_token
+TELEGRAM_MSG_TOKEN=your_notification_bot_token
 RUTRACKER_API_TOKEN=your_rutracker_api_token
 DB_HOST=your_postgres_host
 DB_PORT=5432
@@ -85,6 +86,7 @@ go mod download
 ```json
 {
   "telegram_token": "your_telegram_bot_token",
+  "telegram_msg_token": "your_notification_bot_token",
   "rutracker_api_token": "your_rutracker_api_token",
   "rutracker_host": "https://api.rutracker.cc",
   "db_host": "localhost",
@@ -114,6 +116,7 @@ go run main.go
 | Переменная | Описание | Обязательная | По умолчанию |
 |------------|----------|--------------|--------------|
 | `TELEGRAM_TOKEN` | Токен Telegram бота | Да | - |
+| `TELEGRAM_MSG_TOKEN` | Токен Telegram бота для уведомлений | Нет | - |
 | `RUTRACKER_API_TOKEN` | API токен RuTracker | Да | - |
 | `RUTRACKER_HOST` | Хост API RuTracker | Нет | `https://api.rutracker.cc` |
 | `DB_HOST` | Хост PostgreSQL | Нет | `localhost` |
@@ -130,6 +133,7 @@ go run main.go
 ```json
 {
   "telegram_token": "your_telegram_bot_token",
+  "telegram_msg_token": "your_notification_bot_token",
   "rutracker_api_token": "your_rutracker_api_token",
   "rutracker_host": "https://api.rutracker.cc",
   "db_host": "localhost",

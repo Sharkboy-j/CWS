@@ -20,9 +20,11 @@ import (
 type ClientHandler struct {
 	repo                 *storage.Repository
 	msgSender            messaging.MessageSender
+	notifySender         messaging.MessageSender
 	stateMgr             *StateManager
 	cmdHdlr              *CommandHandler
 	cfg                  *config.Config
+	mainBotUsername      string
 	missingTorrentsCache map[int64][]missingTorrentInfo
 	checkResultsCache    map[int64]*CheckResultsCache
 	torrentFilesCache    map[int64]*TorrentFileCache
@@ -61,14 +63,16 @@ type CheckResultsCache struct {
 	AllMissingTorrents []missingTorrentInfo
 }
 
-func NewClientHandler(repo *storage.Repository, msgSender messaging.MessageSender, stateMgr *StateManager, cfg *config.Config) *ClientHandler {
+func NewClientHandler(repo *storage.Repository, msgSender messaging.MessageSender, notifySender messaging.MessageSender, stateMgr *StateManager, cfg *config.Config, mainBotUsername string) *ClientHandler {
 	quickActionsHandler := quick_actions.NewHandler(repo, msgSender, &stateManagerAdapter{stateMgr: stateMgr})
 
 	return &ClientHandler{
 		repo:                 repo,
 		msgSender:            msgSender,
+		notifySender:         notifySender,
 		stateMgr:             stateMgr,
 		cfg:                  cfg,
+		mainBotUsername:      mainBotUsername,
 		missingTorrentsCache: make(map[int64][]missingTorrentInfo),
 		checkResultsCache:    make(map[int64]*CheckResultsCache),
 		torrentFilesCache:    make(map[int64]*TorrentFileCache),
@@ -304,6 +308,63 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
 			ui.Data(
 				fmt.Sprintf("%s %s", sslText, client.Name),
 				fmt.Sprintf("monitor_torrent_client_%d", client.ID),
+			),
+		))
+	}
+
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		ui.Button(ui.MainMenu),
+	))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
+	messageID := ch.stateMgr.GetMenuMessage(chatId)
+	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if err == nil {
+		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+	}
+}
+
+func (ch *ClientHandler) ShowClientsForTorrentMonitorWithHash(chatId int64, hash string) {
+	ctx := context.Background()
+	clients, err := ch.repo.GetAllClients(ctx, chatId)
+	if err != nil {
+		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении списка клиентов", nil)
+
+		return
+	}
+
+	if len(clients) == 0 {
+		errorText := "📊 *Мониторинг торрента*\n\nКлиенты не найдены. Добавьте клиента для мониторинга."
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				ui.Button(ui.AddClient),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				ui.Button(ui.MainMenu),
+			),
+		)
+		messageID := ch.stateMgr.GetMenuMessage(chatId)
+		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
+		if sendErr == nil {
+			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+		}
+
+		return
+	}
+
+	text := "📊 *Мониторинг торрента*\n\nВыберите клиент:"
+	var rows [][]tgbotapi.InlineKeyboardButton
+
+	for _, client := range clients {
+		sslText := "🔒"
+		if !client.SSL {
+			sslText = "🔓"
+		}
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			ui.Data(
+				fmt.Sprintf("%s %s", sslText, client.Name),
+				fmt.Sprintf("monitor_torrent_start_%d_%s", client.ID, hash),
 			),
 		))
 	}

@@ -126,6 +126,8 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
 	logger.Debugf("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+
+	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
 }
 
 func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
@@ -239,6 +241,8 @@ func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
 	logger.Debugf("Автоматическая проверка завершена для пользователя %d: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+
+	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
 }
 
 func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *storage.Client) ClientCheckResult {
@@ -459,44 +463,22 @@ func (ch *ClientHandler) formatAllClientsResult(ctx context.Context, chatId int6
 	const buttonsPerPage = 5
 
 	if len(allMissingTorrents) > 0 {
-		totalPages := (len(allMissingTorrents) + buttonsPerPage - 1) / buttonsPerPage
-		if totalPages == 0 {
-			totalPages = 1
-		}
-
-		if page < 0 {
-			page = 0
-		}
-		if page >= totalPages {
-			page = totalPages - 1
-		}
-
-		startIdx := page * buttonsPerPage
-		endIdx := startIdx + buttonsPerPage
-		if endIdx > len(allMissingTorrents) {
-			endIdx = len(allMissingTorrents)
-		}
+		pageOut, totalPages, startIdx, endIdx := paginateRange(len(allMissingTorrents), buttonsPerPage, page)
 
 		if len(allMissingTorrents) > buttonsPerPage {
 			for i := startIdx; i < endIdx; i++ {
 				info := allMissingTorrents[i]
-				buttonText := info.name
-				if len(buttonText) > 60 {
-					buttonText = buttonText[:57] + "..."
-				}
-				keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL(buttonText, info.url),
-				))
+				keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(buildMissingTorrentRowButtons(info)...))
 			}
 
 			if totalPages > 1 {
 				var navButtons []tgbotapi.InlineKeyboardButton
-				if page > 0 {
-					navButtons = append(navButtons, ui.ButtonWithData(ui.PrevPage, fmt.Sprintf("page_missing_%d", page-1)))
+				if pageOut > 0 {
+					navButtons = append(navButtons, ui.ButtonWithData(ui.PrevPage, fmt.Sprintf("page_missing_%d", pageOut-1)))
 				}
-				navButtons = append(navButtons, ui.Data(fmt.Sprintf("%d/%d", page+1, totalPages), "page_info"))
-				if page < totalPages-1 {
-					navButtons = append(navButtons, ui.ButtonWithData(ui.NextPage, fmt.Sprintf("page_missing_%d", page+1)))
+				navButtons = append(navButtons, ui.Data(fmt.Sprintf("%d/%d", pageOut+1, totalPages), "page_info"))
+				if pageOut < totalPages-1 {
+					navButtons = append(navButtons, ui.ButtonWithData(ui.NextPage, fmt.Sprintf("page_missing_%d", pageOut+1)))
 				}
 				if len(navButtons) > 0 {
 					keyboardRows = append(keyboardRows, navButtons)
@@ -505,13 +487,7 @@ func (ch *ClientHandler) formatAllClientsResult(ctx context.Context, chatId int6
 		} else {
 			for i := 0; i < len(allMissingTorrents); i++ {
 				info := allMissingTorrents[i]
-				buttonText := info.name
-				if len(buttonText) > 60 {
-					buttonText = buttonText[:57] + "..."
-				}
-				keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonURL(buttonText, info.url),
-				))
+				keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(buildMissingTorrentRowButtons(info)...))
 			}
 		}
 	}

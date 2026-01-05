@@ -450,6 +450,138 @@ func (r *Repository) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 	return userIDs, nil
 }
 
+func (r *Repository) GetCheckUpdatesNotifyState(ctx context.Context, userID int64) (*CheckUpdatesNotifyState, error) {
+	query := `SELECT check_updates_notify_message_id, check_updates_notify_payload_hash, check_updates_notify_missing_hashes, check_updates_notify_items_json
+	          FROM user_states
+	          WHERE user_id = $1`
+
+	var messageID sql.NullInt64
+	var payloadHash sql.NullString
+	var missingHashes sql.NullString
+	var itemsJSON sql.NullString
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&messageID, &payloadHash, &missingHashes, &itemsJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &CheckUpdatesNotifyState{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get check updates notify state: %w", err)
+	}
+
+	state := &CheckUpdatesNotifyState{}
+	if messageID.Valid {
+		state.MessageID = int(messageID.Int64)
+	}
+	if payloadHash.Valid {
+		state.PayloadHash = payloadHash.String
+	}
+	if missingHashes.Valid {
+		state.MissingHashes = missingHashes.String
+	}
+	if itemsJSON.Valid {
+		state.ItemsJSON = itemsJSON.String
+	}
+
+	return state, nil
+}
+
+func (r *Repository) SetCheckUpdatesNotifyState(ctx context.Context, userID int64, st CheckUpdatesNotifyState) error {
+	query := `UPDATE user_states
+	          SET check_updates_notify_message_id = $1,
+	              check_updates_notify_payload_hash = $2,
+	              check_updates_notify_missing_hashes = $3,
+	              check_updates_notify_items_json = $4,
+	              updated_at = NOW()
+	          WHERE user_id = $5`
+
+	res, err := r.db.ExecContext(ctx, query, st.MessageID, st.PayloadHash, st.MissingHashes, st.ItemsJSON, userID)
+	if err != nil {
+		return fmt.Errorf("failed to set check updates notify state: %w", err)
+	}
+
+	rowsAffected, raErr := res.RowsAffected()
+	if raErr != nil {
+		return fmt.Errorf("failed to get rows affected: %w", raErr)
+	}
+
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	query = `INSERT INTO user_states (
+	            user_id, state,
+	            check_updates_notify_message_id,
+	            check_updates_notify_payload_hash,
+	            check_updates_notify_missing_hashes,
+	            check_updates_notify_items_json,
+	            updated_at
+	         )
+	         VALUES ($1, '', $2, $3, $4, $5, NOW())
+	         ON CONFLICT (user_id)
+	         DO UPDATE SET
+	            check_updates_notify_message_id = $2,
+	            check_updates_notify_payload_hash = $3,
+	            check_updates_notify_missing_hashes = $4,
+	            check_updates_notify_items_json = $5,
+	            updated_at = NOW()`
+
+	_, err = r.db.ExecContext(ctx, query, userID, st.MessageID, st.PayloadHash, st.MissingHashes, st.ItemsJSON)
+	if err != nil {
+		return fmt.Errorf("failed to insert/update check updates notify state: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) GetNotificationsEnabled(ctx context.Context, userID int64) (bool, error) {
+	query := `SELECT notifications_enabled FROM user_states WHERE user_id = $1`
+
+	var enabled sql.NullBool
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return true, fmt.Errorf("failed to get notifications_enabled: %w", err)
+	}
+	if !enabled.Valid {
+		return true, nil
+	}
+
+	return enabled.Bool, nil
+}
+
+func (r *Repository) SetNotificationsEnabled(ctx context.Context, userID int64, enabled bool) error {
+	query := `UPDATE user_states
+	          SET notifications_enabled = $1, updated_at = NOW()
+	          WHERE user_id = $2`
+
+	res, err := r.db.ExecContext(ctx, query, enabled, userID)
+	if err != nil {
+		return fmt.Errorf("failed to set notifications_enabled: %w", err)
+	}
+
+	rowsAffected, raErr := res.RowsAffected()
+	if raErr != nil {
+		return fmt.Errorf("failed to get rows affected: %w", raErr)
+	}
+
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	query = `INSERT INTO user_states (user_id, state, notifications_enabled, updated_at)
+	         VALUES ($1, '', $2, NOW())
+	         ON CONFLICT (user_id)
+	         DO UPDATE SET notifications_enabled = $2, updated_at = NOW()`
+
+	_, err = r.db.ExecContext(ctx, query, userID, enabled)
+	if err != nil {
+		return fmt.Errorf("failed to insert/update notifications_enabled: %w", err)
+	}
+
+	return nil
+}
+
 func (r *Repository) SetUserTimezone(ctx context.Context, userID int64, timezone string) error {
 	logger.Debug("Сохранение часового пояса для пользователя %d: %s", userID, timezone)
 	query := `UPDATE user_states 
