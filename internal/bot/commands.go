@@ -46,7 +46,7 @@ func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
 			hash := strings.TrimPrefix(args, "monitor_")
 			hash = strings.TrimSpace(hash)
 			if hash != "" {
-				ch.clientHdlr.ShowClientsForTorrentMonitor(chatId, hash)
+				ch.clientHdlr.ShowClientsForTorrentMonitorWithHash(chatId, hash)
 
 				return
 			}
@@ -60,7 +60,7 @@ func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
 		ch.HandleClientsCommand(chatId)
 	default:
 		logger.Warn("Пользователь %d выполнил неизвестную команду: /%s", chatId, command)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Неизвестная команда", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgUnknownCommand), nil)
 	}
 }
 
@@ -89,7 +89,7 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 			qbClient, qbErr := qbit.New(ctx, client)
 			if qbErr != nil {
 				logger.Error("Ошибка при подключении к клиенту %s: %v", client.Name, qbErr)
-				text.WriteString(fmt.Sprintf("❌ *%s* - ошибка подключения\n\n", client.Name))
+				text.WriteString(ui.Msgf(ui.MsgMainMenuClientConnectErrorFmt, client.Name))
 
 				continue
 			}
@@ -97,46 +97,22 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 			transferInfo, transferErr := qbClient.GetTransferInfo(ctx)
 			if transferErr != nil {
 				logger.Error("Ошибка при получении информации о передаче для клиента %s: %v", client.Name, transferErr)
-				text.WriteString(fmt.Sprintf("⚠️ *%s* - ошибка получения данных\n\n", client.Name))
+				text.WriteString(ui.Msgf(ui.MsgMainMenuClientTransferInfoErrorFmt, client.Name))
 
 				continue
 			}
 
-			text.WriteString(fmt.Sprintf("🔹 *%s* ", client.Name))
+			text.WriteString(ui.Msgf(ui.MsgMainMenuClientLinePrefixFmt, client.Name))
 
-			formatSpeed := func(bytesPerSec int64) string {
-				if bytesPerSec == 0 {
-					return "0 B/s"
-				}
-				if bytesPerSec < 1024 {
-					return fmt.Sprintf("%d B/s", bytesPerSec)
-				}
-				if bytesPerSec < 1024*1024 {
-					return fmt.Sprintf("%.1f KB/s", float64(bytesPerSec)/1024)
-				}
-
-				return fmt.Sprintf("%.1f MB/s", float64(bytesPerSec)/(1024*1024))
-			}
-
-			formatLimit := func(bytesPerSec int64) string {
-				if bytesPerSec == 0 {
-					return ""
-				}
-
-				mbPerSec := float64(bytesPerSec) / (1024 * 1024)
-
-				return fmt.Sprintf("%.2f МБ/с", mbPerSec)
-			}
-
-			text.WriteString(fmt.Sprintf("⬇️ %s", formatSpeed(transferInfo.DownloadSpeed)))
-			if transferInfo.DownloadLimit > 0 {
-				text.WriteString(fmt.Sprintf(" \\[%s]", formatLimit(transferInfo.DownloadLimit)))
+			text.WriteString(ui.Msgf(ui.MsgMainMenuDownloadFmt, ui.FormatSpeed(transferInfo.DownloadSpeed)))
+			if limit := ui.FormatSpeedLimit(transferInfo.DownloadLimit); limit != "" {
+				text.WriteString(ui.Msgf(ui.MsgMainMenuSpeedLimitBracketFmt, limit))
 			}
 			text.WriteString(" ")
 
-			text.WriteString(fmt.Sprintf("⬆️ %s", formatSpeed(transferInfo.UploadSpeed)))
-			if transferInfo.UploadLimit > 0 {
-				text.WriteString(fmt.Sprintf(" \\[%s]", formatLimit(transferInfo.UploadLimit)))
+			text.WriteString(ui.Msgf(ui.MsgMainMenuUploadFmt, ui.FormatSpeed(transferInfo.UploadSpeed)))
+			if limit := ui.FormatSpeedLimit(transferInfo.UploadLimit); limit != "" {
+				text.WriteString(ui.Msgf(ui.MsgMainMenuSpeedLimitBracketFmt, limit))
 			}
 		}
 	}
@@ -181,21 +157,21 @@ func (ch *CommandHandler) ShowSettingsMenu(chatId int64) {
 		logger.Warn("Failed to read notifications_enabled for user %d: %v", chatId, err)
 		enabled = true
 	}
-	label := "🔔 Уведомления: "
 	var status string
 	if enabled {
-		status = "ВКЛ"
+		status = ui.Msg(ui.MsgNotificationsStatusOn)
 	} else {
-		status = "ВЫКЛ"
+		status = ui.Msg(ui.MsgNotificationsStatusOff)
 	}
 
-	text := "⚙️ *Настройки*\n\nВыберите раздел настроек:"
+	text := ui.Msg(ui.MsgSettingsMenuText)
+	toggleLabel := ui.Msgf(ui.MsgNotificationsToggleButtonFmt, status)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.ClientsMenu),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			ui.Data(label+status, "toggle_notifications"),
+			ui.Data(toggleLabel, "toggle_notifications"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.Variables),
@@ -218,7 +194,7 @@ func (ch *CommandHandler) ShowTimezoneMenu(chatId int64, page int) {
 	logger.Debugf("Показ меню часового пояса для пользователя %d", chatId)
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
-	text := "🕒 *Часовой пояс*\n\nВыберите часовой пояс или отправьте свою локацию:"
+	text := ui.Msg(ui.MsgTimezoneMenuText)
 	timezones := []string{
 		"UTC",
 		"Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Amsterdam", "Europe/Zurich",
@@ -297,13 +273,13 @@ func (ch *CommandHandler) ShowVariablesMenu(chatId int64) {
 		count = 3
 	}
 
-	text := "🔧 *Переменные*"
-	varLabel := fmt.Sprintf("%s: %d", ui.Text(ui.RecommendedTorrents), count)
+	text := ui.Msg(ui.MsgVariablesMenuText)
+	varLabel := ui.Msgf(ui.MsgKeyValueIntFmt, ui.Text(ui.RecommendedTorrents), count)
 	tz, tzErr := ch.repo.GetUserTimezone(ctx, chatId)
 	if tzErr != nil || tz == "" {
 		tz = "Europe/Minsk"
 	}
-	tzLabel := fmt.Sprintf("%s: %s", ui.Text(ui.Timezone), tz)
+	tzLabel := ui.Msgf(ui.MsgKeyValueStringFmt, ui.Text(ui.Timezone), tz)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -338,7 +314,7 @@ func (ch *CommandHandler) ShowEditRecommendedTorrents(chatId int64) {
 		count = 3
 	}
 
-	text := fmt.Sprintf("🔧 *Редактирование переменной*\n\nРекомендуемое количество торрентов на странице выбора мониторинга: *%d*\n\nВыберите новое значение:", count)
+	text := ui.Msgf(ui.MsgEditRecommendedTorrentsTextFmt, count)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -371,7 +347,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении списка клиентов", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
 
 		return
 	}
@@ -380,7 +356,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
 	if len(clients) == 0 {
-		text := "📋 *Проверка активных торрентов*\n\nКлиенты не найдены. Добавьте клиента для проверки."
+		text := ui.Msg(ui.MsgCheckClientsListNoClients)
 		sendErr := sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text)
 		if sendErr != nil {
 			return
@@ -389,21 +365,21 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 		return
 	}
 	var text strings.Builder
-	text.WriteString("📋 *Проверка активных торрентов*\n\n")
-	text.WriteString("Выберите клиента для проверки:\n\n")
+	text.WriteString(ui.Msg(ui.MsgCheckClientsListHeader))
+	text.WriteString(ui.Msg(ui.MsgCheckClientsListChooseClient))
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, client := range clients {
-		sslText := "🔒"
+		sslText := ui.IconSSL
 		if !client.SSL {
-			sslText = "🔓"
+			sslText = ui.IconNoSSL
 		}
-		text.WriteString(fmt.Sprintf("%s *%s*\n", sslText, client.Name))
-		text.WriteString(fmt.Sprintf("   `%s:%d`\n\n", client.Host, client.Port))
+		text.WriteString(ui.Msgf(ui.MsgClientListItemFmt, sslText, client.Name))
+		text.WriteString(ui.Msgf(ui.MsgClientHostPortFmt, client.Host, client.Port))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
-				fmt.Sprintf("🔍 Проверить %s", client.Name),
+				ui.Msgf(ui.MsgCheckClientsListButtonCheckFmt, client.Name),
 				fmt.Sprintf("check_client_%d", client.ID),
 			),
 		))
@@ -429,7 +405,7 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении списка клиентов", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
 
 		return
 	}
@@ -438,7 +414,7 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	messageID := ch.stateMgr.GetMenuMessage(chatId)
 
 	if len(clients) == 0 {
-		text := "📋 *Клиенты qBittorrent*\n\nКлиенты не найдены. Добавьте первого клиента."
+		text := ui.Msg(ui.MsgClientsListNoClients)
 		err = sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text)
 		if err != nil {
 			return
@@ -447,20 +423,20 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 		return
 	}
 	var text strings.Builder
-	text.WriteString("📋 *Клиенты qBittorrent*\n\n")
+	text.WriteString(ui.Msg(ui.MsgClientsListHeader))
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for _, client := range clients {
-		sslText := "🔒"
+		sslText := ui.IconSSL
 		if !client.SSL {
-			sslText = "🔓"
+			sslText = ui.IconNoSSL
 		}
-		text.WriteString(fmt.Sprintf("%s *%s*\n", sslText, client.Name))
-		text.WriteString(fmt.Sprintf("   `%s:%d`\n\n", client.Host, client.Port))
+		text.WriteString(ui.Msgf(ui.MsgClientListItemFmt, sslText, client.Name))
+		text.WriteString(ui.Msgf(ui.MsgClientHostPortFmt, client.Host, client.Port))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
-				fmt.Sprintf("🔧 %s", client.Name),
+				ui.Msgf(ui.MsgClientsListButtonDetailsFmt, client.Name),
 				fmt.Sprintf("client_%d", client.ID),
 			),
 		))

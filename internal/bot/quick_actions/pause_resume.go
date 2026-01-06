@@ -1,9 +1,9 @@
 package quick_actions
 
 import (
+	"cws/internal/bot/ui"
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
-	"fmt"
 )
 
 func (h *Handler) HandlePauseAllTorrents(chatId int64) {
@@ -12,7 +12,7 @@ func (h *Handler) HandlePauseAllTorrents(chatId int64) {
 	if !ok {
 		return
 	}
-	text := "⏸ *Остановка всех раздач*\n\n"
+	text := ui.Msg(ui.MsgPauseAllHeaderText)
 	var successCount, failCount int
 	var failedClients []string
 
@@ -33,7 +33,7 @@ func (h *Handler) HandlePauseAllTorrents(chatId int64) {
 			failedClients = append(failedClients, client.Name)
 		} else {
 			successCount++
-			text += fmt.Sprintf("✅ *%s* - остановлено\n", client.Name)
+			text += ui.Msgf(ui.MsgPauseAllClientSuccessFmt, client.Name)
 		}
 	}
 
@@ -48,7 +48,7 @@ func (h *Handler) HandleResumeAllTorrents(chatId int64) {
 	if !ok {
 		return
 	}
-	text := "▶ *Запуск всех раздач*\n\n"
+	text := ui.Msg(ui.MsgResumeAllHeaderText)
 	var successCount, failCount int
 	var failedClients []string
 
@@ -69,7 +69,7 @@ func (h *Handler) HandleResumeAllTorrents(chatId int64) {
 			failedClients = append(failedClients, client.Name)
 		} else {
 			successCount++
-			text += fmt.Sprintf("✅ *%s* - запущено\n", client.Name)
+			text += ui.Msgf(ui.MsgResumeAllClientSuccessFmt, client.Name)
 		}
 	}
 

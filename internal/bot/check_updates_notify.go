@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"crypto/sha256"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/textutil"
 	"cws/logger"
@@ -260,7 +261,7 @@ func buildCheckUpdatesNotificationMessage(items []notifyTorrentItem, page int, m
 		}
 		if mainBotUsername != "" && it.Hash != "" {
 			monitorURL := "https://t.me/" + mainBotUsername + "?start=monitor_" + it.Hash
-			row = append(row, tgbotapi.NewInlineKeyboardButtonURL("📊", monitorURL))
+			row = append(row, tgbotapi.NewInlineKeyboardButtonURL(ui.IconChart, monitorURL))
 		}
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(row...))
 	}
@@ -268,11 +269,11 @@ func buildCheckUpdatesNotificationMessage(items []notifyTorrentItem, page int, m
 	if totalPages > 1 {
 		var nav []tgbotapi.InlineKeyboardButton
 		if page > 0 {
-			nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("◀️", "notify_missing_page_"+intToString(page-1)))
+			nav = append(nav, tgbotapi.NewInlineKeyboardButtonData(ui.IconArrowLeft, "notify_missing_page_"+intToString(page-1)))
 		}
 		nav = append(nav, tgbotapi.NewInlineKeyboardButtonData(intToString(page+1)+"/"+intToString(totalPages), "notify_noop"))
 		if page < totalPages-1 {
-			nav = append(nav, tgbotapi.NewInlineKeyboardButtonData("▶️", "notify_missing_page_"+intToString(page+1)))
+			nav = append(nav, tgbotapi.NewInlineKeyboardButtonData(ui.IconArrowRight, "notify_missing_page_"+intToString(page+1)))
 		}
 		rows = append(rows, nav)
 	}

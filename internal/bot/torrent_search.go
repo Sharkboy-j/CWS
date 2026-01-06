@@ -44,7 +44,7 @@ func NewTorrentSearchService(repo *storage.Repository, msgSender messaging.Messa
 
 func (tss *TorrentSearchService) StartTorrentSearchDialog(chatId int64) {
 	tss.stateMgr.SetUserState(chatId, "search_torrent_query")
-	text := "🔎 *Поиск торрента*\n\nВведите хеш или название торрента (частичное или полное):"
+	text := ui.Msg(ui.MsgSearchStartPromptText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.Cancel, "main_menu"),
@@ -66,7 +66,7 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 	clients, err := tss.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для поиска: %v", err)
-		text := "❌ Ошибка при получении списка клиентов"
+		text := ui.Msg(ui.MsgSearchClientsListError)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -79,7 +79,7 @@ func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
 	}
 
 	if len(clients) == 0 {
-		text := "🔎 *Поиск торрента*\n\nКлиенты не найдены. Добавьте клиента для поиска."
+		text := ui.Msg(ui.MsgSearchNoClientsText)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.AddClient),
@@ -153,7 +153,7 @@ func (tss *TorrentSearchService) ShowSearchResultsPage(chatId int64, page int) {
 	cache, exists := tss.torrentSearchCache[chatId]
 	if !exists || cache == nil {
 		logger.Warn("Пользователь %d запросил страницу %d, но кэш результатов поиска отсутствует", chatId, page)
-		text := "Результаты поиска устарели. Выполните поиск заново."
+		text := ui.Msg(ui.MsgSearchResultsStaleText)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.NewSearch),
@@ -194,7 +194,7 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 	messageID := tss.stateMgr.GetMenuMessage(chatId)
 
 	if len(results) == 0 {
-		text := fmt.Sprintf("🔎 *Поиск торрента*\n\n❌ По запросу `%s` ничего не найдено", query)
+		text := ui.Msgf(ui.MsgSearchNoResultsFmt, query)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.NewSearch),
@@ -228,11 +228,11 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 
 	var text strings.Builder
 	if query != "" {
-		text.WriteString(fmt.Sprintf("🔎 *Результаты поиска*\n\nЗапрос: `%s`\n\n", query))
+		text.WriteString(ui.Msgf(ui.MsgSearchResultsHeaderWithQueryFmt, query))
 	} else {
-		text.WriteString("🔎 *Результаты поиска*\n\n")
+		text.WriteString(ui.Msg(ui.MsgSearchResultsHeader))
 	}
-	text.WriteString(fmt.Sprintf("Найдено: *%d*\n\n", len(results)))
+	text.WriteString(ui.Msgf(ui.MsgSearchResultsFoundCountFmt, len(results)))
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for i, result := range pageResults {
@@ -242,12 +242,12 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 		}
 
 		globalIdx := startIdx + i
-		text.WriteString(fmt.Sprintf("%d. *%s*\n", globalIdx+1, displayName))
-		text.WriteString(fmt.Sprintf("   Hash: `%s`\n\n", result.Hash))
+		text.WriteString(ui.Msgf(ui.MsgSearchResultsItemLineFmt, globalIdx+1, displayName))
+		text.WriteString(ui.Msgf(ui.MsgSearchResultsItemHashFmt, result.Hash))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
-				fmt.Sprintf("%d. %s", globalIdx+1, truncatePath(displayName, 999)),
+				ui.Msgf(ui.MsgSearchResultsButtonItemFmt, globalIdx+1, truncatePath(displayName, 999)),
 				fmt.Sprintf("search_torrent_select_%d", globalIdx),
 			),
 		))

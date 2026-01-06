@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"cws/config"
+	"cws/internal/bot/ui"
 	"cws/internal/storage"
 	"cws/internal/telegram"
 	"cws/internal/telegram/messaging"
@@ -78,15 +79,15 @@ func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (
 	commands := []tgbotapi.BotCommand{
 		{
 			Command:     "menu",
-			Description: "Главное меню",
+			Description: ui.Msg(ui.MsgBotCommandMenuDescription),
 		},
 		{
 			Command:     "check",
-			Description: "Проверить статус",
+			Description: ui.Msg(ui.MsgBotCommandCheckDescription),
 		},
 		{
 			Command:     "clients",
-			Description: "Управление клиентами qBittorrent",
+			Description: ui.Msg(ui.MsgBotCommandClientsDescription),
 		},
 	}
 

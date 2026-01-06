@@ -54,7 +54,7 @@ func buildMissingTorrentRowButtons(info missingTorrentInfo) []tgbotapi.InlineKey
 		tgbotapi.NewInlineKeyboardButtonURL(btnText, info.url),
 	}
 	if info.hash != "" {
-		row = append(row, ui.Data("📊", fmt.Sprintf("monitor_from_missing_%s", info.hash)))
+		row = append(row, ui.Data(ui.IconChart, fmt.Sprintf("monitor_from_missing_%s", info.hash)))
 	}
 
 	return row

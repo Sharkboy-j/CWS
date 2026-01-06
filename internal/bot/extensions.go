@@ -8,7 +8,6 @@ import (
 	"cws/internal/textutil"
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
-	"fmt"
 
 	"github.com/autobrr/go-qbittorrent"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -84,14 +83,14 @@ func (ch *ClientHandler) getClientByIDWithErrorHandling(chatId int64, clientID i
 	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении данных клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorGetClientData), nil)
 
 		return nil, false
 	}
 
 	if client == nil {
 		logger.Warn("Пользователь %d попытался получить доступ к несуществующему клиенту %d", chatId, clientID)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Клиент не найден или у вас нет доступа", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorClientNotFoundOrNoAccess), nil)
 
 		return nil, false
 	}
@@ -103,7 +102,7 @@ func (ch *ClientHandler) getClientByIDOrReply(ctx context.Context, chatId int64,
 	client, err := ch.repo.GetClientByID(ctx, clientID, chatId)
 	if err != nil || client == nil {
 		logger.Error("Ошибка при получении клиента %d для пользователя %d: %v", clientID, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении данных клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorGetClientDataWithEmoji), nil)
 
 		return nil, false
 	}
@@ -120,7 +119,7 @@ func (ch *ClientHandler) getQbClientByIDOrReply(ctx context.Context, chatId int6
 	qbClient, err := qbit.New(ctx, client)
 	if err != nil {
 		logger.Error("Ошибка при подключении к qBit клиенту %s для пользователя %d: %v", client.Name, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*", client.Name), nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msgf(ui.MsgErrorConnectClientFmt, client.Name), nil)
 
 		return nil, nil, false
 	}

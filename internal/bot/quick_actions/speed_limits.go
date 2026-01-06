@@ -5,7 +5,6 @@ import (
 	"cws/internal/bot/ui"
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
-	"fmt"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -16,7 +15,7 @@ func (h *Handler) ShowSpeedLimitMenu(chatId int64) {
 	clients, err := h.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Error getting clients for user %d: %v", chatId, err)
-		_, _ = h.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении списка клиентов", nil)
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
 
 		return
 	}
@@ -24,7 +23,7 @@ func (h *Handler) ShowSpeedLimitMenu(chatId int64) {
 	messageID := h.stateMgr.GetMenuMessage(chatId)
 
 	if len(clients) == 0 {
-		text := "🚦 *Ограничение скорости*\n\nКлиенты не найдены. Добавьте клиента для использования ограничения скорости."
+		text := ui.Msg(ui.MsgSpeedLimitMenuNoClientsText)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -41,7 +40,7 @@ func (h *Handler) ShowSpeedLimitMenu(chatId int64) {
 		return
 	}
 
-	text := "🚦 *Ограничение скорости*\n\nВыберите скорость:"
+	text := ui.Msg(ui.MsgSpeedLimitMenuText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.Speed10),
@@ -84,7 +83,7 @@ func (h *Handler) StartCustomSpeedLimitDialog(chatId int64) {
 	if h.stateSetter != nil {
 		h.stateSetter.SetUserState(chatId, "custom_speed_limit")
 	}
-	text := "🚦 *Ограничение скорости*\n\nВведите скорость в МБ/с (например: 2.5):"
+	text := ui.Msg(ui.MsgSpeedLimitCustomPromptText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.Cancel, "quick_actions"),
@@ -134,7 +133,7 @@ func (h *Handler) HandleLimitSpeedBytes(chatId int64, limitBytesPerSec int64) {
 
 	if failCount > 0 {
 		messageID := h.stateMgr.GetMenuMessage(chatId)
-		text := fmt.Sprintf("🚦 *Ограничение скорости до %.2f МБ/с*\n\n", limitMBPerSec)
+		text := ui.Msgf(ui.MsgSpeedLimitAppliedHeaderFmt, limitMBPerSec)
 		_ = h.sendOrEditResultWithMainMenu(chatId, messageID, text, successCount, failCount, failedClients)
 
 		return
@@ -179,7 +178,7 @@ func (h *Handler) HandleRemoveSpeedLimits(chatId int64) {
 
 	if failCount > 0 {
 		messageID := h.stateMgr.GetMenuMessage(chatId)
-		text := "🚫 *Снятие ограничений скорости*\n\n"
+		text := ui.Msg(ui.MsgSpeedLimitsRemovedHeader)
 		_ = h.sendOrEditResultWithMainMenu(chatId, messageID, text, successCount, failCount, failedClients)
 
 		return

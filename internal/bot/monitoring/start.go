@@ -31,7 +31,7 @@ func (tms *torrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 
 	client, err := tms.repo.GetClientByID(ctx, clientID, chatId)
 	if err == nil && client != nil {
-		text := fmt.Sprintf("✅\n\nКлиент: *%s*\n\n⏳ Обработка...", textutil.EscapeMarkdown(client.Name))
+		text := ui.Msgf(ui.MsgTorrentMonitorClientProcessingFmt, textutil.EscapeMarkdown(client.Name))
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -109,7 +109,7 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 
 	if torrent == nil {
 		logger.Debug("Торрент не найден для мониторинга, hash: %s, продолжаем попытки...", monitor.Hash)
-		text := fmt.Sprintf("✅\n\nКлиент: *%s*\n\n⏳ Торрент обрабатывается qBittorrent...\n\n_Обработка..._", textutil.EscapeMarkdown(client.Name))
+		text := ui.Msgf(ui.MsgTorrentMonitorClientTorrentProcessingFmt, textutil.EscapeMarkdown(client.Name))
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -137,7 +137,7 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 	var rows [][]tgbotapi.InlineKeyboardButton
 	if torrentURL != "" {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonURL("🔗 Открыть раздачу", torrentURL),
+			tgbotapi.NewInlineKeyboardButtonURL(ui.Msg(ui.MsgTorrentMonitorOpenTorrentButtonText), torrentURL),
 		))
 	}
 	// Determine whether torrent is actively transferring. If active, show Pause;
@@ -190,74 +190,50 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 	var progress float64
 	switch torrent.State {
 	case "downloading":
-		status = "⬇️ Загрузка"
+		status = ui.Msg(ui.MsgTorrentActivityDownloading)
 		progress = torrent.Progress * 100
 	case "uploading":
-		status = "⬆️ Раздача"
+		status = ui.Msg(ui.MsgTorrentActivityUploading)
 		progress = 100.0
 	case "stalledUP":
-		status = "⚠️ Раздача (застой)"
+		status = ui.Msg(ui.MsgTorrentActivityUploadStalled)
 		progress = torrent.Progress * 100
 	case "stalledDL":
-		status = "⚠️ Загрузка (застой)"
+		status = ui.Msg(ui.MsgTorrentActivityDownloadStalled)
 		progress = torrent.Progress * 100
 	case "checkingUP", "checkingDL", "checkingResumeData":
-		status = "🔍 Проверка"
+		status = ui.Msg(ui.MsgTorrentActivityChecking)
 		progress = torrent.Progress * 100
 	case "queuedUP", "queuedDL":
-		status = "⏳ В очереди"
+		status = ui.Msg(ui.MsgTorrentActivityQueued)
 		progress = torrent.Progress * 100
 	case "pausedUP", "pausedDL", "stoppedUP", "stoppedDL":
-		status = "⏸ Остановлен"
+		status = ui.Msg(ui.MsgTorrentActivityPaused)
 		progress = torrent.Progress * 100
 	case "metaDL":
-		status = "⬇️ Получение метаданных"
+		status = ui.Msg(ui.MsgTorrentActivityFetchingMetadata)
 		progress = torrent.Progress * 100
 	case "error":
-		status = "❌ Ошибка"
+		status = ui.Msg(ui.MsgTorrentActivityError)
 		progress = torrent.Progress * 100
 	case "missingFiles":
-		status = "⚠️ Отсутствуют файлы"
+		status = ui.Msg(ui.MsgTorrentActivityMissingFiles)
 		progress = torrent.Progress * 100
 	default:
-		status = "ℹ️ " + string(torrent.State)
+		status = ui.Msgf(ui.MsgTorrentActivityOtherFmt, string(torrent.State))
 		progress = torrent.Progress * 100
 	}
 
-	formatSize := func(bytes int64) string {
-		const unit = 1024
-		if bytes < unit {
-
-			return fmt.Sprintf("%d B", bytes)
-		}
-		div, exp := int64(unit), 0
-		for n := bytes / unit; n >= unit; n /= unit {
-			div *= unit
-			exp++
-		}
-
-		return fmt.Sprintf("%.2f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-	}
-
-	formatSpeed := func(bytesPerSec int64) string {
-		if bytesPerSec < 1024 {
-
-			return fmt.Sprintf("%d B/s", bytesPerSec)
-		}
-
-		return formatSize(bytesPerSec) + "/s"
-	}
-
-	text := "📊 *Прогресс торрента*\n\n"
-	text += fmt.Sprintf(" *%s*\n\n", textutil.EscapeMarkdown(torrent.Name))
-	text += fmt.Sprintf("📁 *%s*\n\n", textutil.EscapeMarkdown(torrent.DownloadPath))
-	text += fmt.Sprintf("Статус: %s\n", status)
-	text += fmt.Sprintf("Прогресс: *%.1f%%*\n\n", progress)
-	text += fmt.Sprintf("⬇️ Загрузка: %s\n", formatSpeed(torrent.DlSpeed))
-	text += fmt.Sprintf("⬆️ Отдача: %s\n", formatSpeed(torrent.UpSpeed))
-	text += fmt.Sprintf("📤 Всего отдано: %s\n", formatSize(torrent.Uploaded))
-	text += fmt.Sprintf("👥 Сиды: %d | Пиры: %d\n\n", torrent.NumSeeds, numPeers)
-	text += fmt.Sprintf("📦 Размер: %s / %s", formatSize(torrent.Completed), formatSize(torrent.Size))
+	text := ui.Msg(ui.MsgTorrentProgressHeaderText)
+	text += ui.Msgf(ui.MsgTorrentProgressNameFmt, textutil.EscapeMarkdown(torrent.Name))
+	text += ui.Msgf(ui.MsgTorrentProgressPathFmt, textutil.EscapeMarkdown(torrent.DownloadPath))
+	text += ui.Msgf(ui.MsgTorrentProgressStatusFmt, status)
+	text += ui.Msgf(ui.MsgTorrentProgressPercentFmt, progress)
+	text += ui.Msgf(ui.MsgTorrentProgressDownloadFmt, ui.FormatSpeedBytes(torrent.DlSpeed))
+	text += ui.Msgf(ui.MsgTorrentProgressUploadFmt, ui.FormatSpeedBytes(torrent.UpSpeed))
+	text += ui.Msgf(ui.MsgTorrentProgressUploadedFmt, ui.FormatBytes(torrent.Uploaded))
+	text += ui.Msgf(ui.MsgTorrentProgressSeedsPeersFmt, torrent.NumSeeds, numPeers)
+	text += ui.Msgf(ui.MsgTorrentProgressSizeFmt, ui.FormatBytes(torrent.Completed), ui.FormatBytes(torrent.Size))
 
 	return text
 }

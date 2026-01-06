@@ -53,7 +53,7 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 	clients, err := h.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Error getting clients for user %d: %v", chatId, err)
-		_, _ = h.msgSender.SendOrEdit(chatId, 0, "Ошибка при получении списка клиентов", nil)
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
 
 		return
 	}
@@ -61,7 +61,7 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 	messageID := h.stateMgr.GetMenuMessage(chatId)
 
 	if len(clients) == 0 {
-		text := "⚡ *Быстрые действия*\n\nКлиенты не найдены. Добавьте клиента для использования быстрых действий."
+		text := ui.Msg(ui.MsgQuickActionsMenuNoClientsText)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -78,7 +78,7 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 		return
 	}
 
-	text := "⚡ *Быстрые действия*\n\nВыберите действие:"
+	text := ui.Msg(ui.MsgQuickActionsMenuText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.PauseAllTorrents),
@@ -108,13 +108,13 @@ func (h *Handler) getClientsAndMenuMessageOrReply(chatId int64) (context.Context
 	clients, err := h.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Error getting clients for user %d: %v", chatId, err)
-		_, _ = h.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении списка клиентов", nil)
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListErrorWithEmoji), nil)
 
 		return nil, nil, 0, false
 	}
 
 	if len(clients) == 0 {
-		_, _ = h.msgSender.SendOrEdit(chatId, 0, "❌ Клиенты не найдены", nil)
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgQuickActionsNoClients), nil)
 
 		return nil, nil, 0, false
 	}

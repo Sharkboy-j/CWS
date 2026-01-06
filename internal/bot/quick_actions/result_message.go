@@ -2,7 +2,6 @@ package quick_actions
 
 import (
 	"cws/internal/bot/ui"
-	"fmt"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -18,13 +17,13 @@ func (h *Handler) sendOrEditResultWithMainMenu(
 	failedClients []string,
 ) bool {
 	if failCount > 0 {
-		text += fmt.Sprintf("\n❌ Ошибки (%d):\n", failCount)
+		text += ui.Msgf(ui.MsgResultErrorsHeaderFmt, failCount)
 		for _, name := range failedClients {
-			text += fmt.Sprintf("  • %s\n", name)
+			text += ui.Msgf(ui.MsgResultErrorsItemFmt, name)
 		}
 	}
 
-	text += fmt.Sprintf("\nВсего обработано: %d успешно, %d с ошибками", successCount, failCount)
+	text += ui.Msgf(ui.MsgResultTotalsFmt, successCount, failCount)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(

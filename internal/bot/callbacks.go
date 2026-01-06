@@ -38,7 +38,7 @@ func (ch *CallbackHandler) parseClientIDAndGetTorrentCache(chatId int64, clientI
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return 0, nil, false
 	}
@@ -46,7 +46,7 @@ func (ch *CallbackHandler) parseClientIDAndGetTorrentCache(chatId int64, clientI
 	cache, exists := ch.clientHdlr.torrentFilesCache[chatId]
 	if !exists || cache == nil || cache.ExistingHash == "" {
 		logger.Warn("Кэш торрент файла не найден или hash отсутствует для пользователя %d", chatId)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные торрента не найдены. Начните заново.", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorTorrentDataNotFoundStartOver), nil)
 
 		return clientID, nil, false
 	}
@@ -143,7 +143,7 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		}
 	case data == "edit_recommended_torrents_input":
 		ch.stateMgr.SetUserState(chatId, "edit_recommended_torrents_input")
-		text := "✏️ Введите число рекомендуемых торрентов для отображения на странице выбора мониторинга (например: 3):"
+		text := ui.Msg(ui.MsgVariablesRecommendedTorrentsPrompt)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.ButtonWithData(ui.Cancel, "variables"),
@@ -205,12 +205,12 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		logger.Debugf("Пользователь %d отменил добавление клиента", chatId)
 		ch.stateMgr.DeleteUserState(chatId)
 		ch.stateMgr.SetDialogMessage(chatId, 0)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Добавление клиента отменено", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgAddClientCancelled), nil)
 	case data == "cancel_edit_client":
 		logger.Debugf("Пользователь %d отменил редактирование клиента", chatId)
 		ch.stateMgr.DeleteUserState(chatId)
 		ch.stateMgr.SetDialogMessage(chatId, 0)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Редактирование клиента отменено", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgEditClientCancelled), nil)
 	case data == "set_ssl_true":
 		ch.dialogHdlr.FinishAddClient(chatId, true)
 	case data == "set_ssl_false":
@@ -292,7 +292,7 @@ func (ch *CallbackHandler) handleMonitorTorrentClient(chatId int64, data string)
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -362,14 +362,14 @@ func (ch *CallbackHandler) handleMonitorTorrentHashButton(chatId int64, data str
 	cache, exists := ch.clientHdlr.torrentMonitorCache[chatId]
 	if !exists || cache == nil || cache.ClientID != clientID {
 		logger.Warn("Кэш торрентов для мониторинга не найден для пользователя %d", chatId)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: данные не найдены. Начните заново.", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorDataNotFoundStartOver), nil)
 
 		return
 	}
 
 	if index < 0 || index >= len(cache.Torrents) {
 		logger.Warn("Неверный индекс торрента %d для пользователя %d (всего: %d)", index, chatId, len(cache.Torrents))
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка: неверный индекс торрента.", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidTorrentIndex), nil)
 
 		return
 	}
@@ -388,7 +388,7 @@ func (ch *CallbackHandler) handleMonitorTorrentManual(chatId int64, data string)
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -423,7 +423,7 @@ func (ch *CallbackHandler) handleMonitorPause(chatId int64, data string) {
 
 	if err = qbClient.PauseTorrent(ctx, hash); err != nil {
 		logger.Error("Error pausing torrent %s for user %d: %v", hash, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при остановке торрента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorPauseTorrent), nil)
 
 		return
 	}
@@ -456,7 +456,7 @@ func (ch *CallbackHandler) handleMonitorResume(chatId int64, data string) {
 
 	if err = qbClient.ResumeTorrent(ctx, hash); err != nil {
 		logger.Error("Error resuming torrent %s for user %d: %v", hash, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при запуске торрента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorResumeTorrent), nil)
 
 		return
 	}
@@ -512,7 +512,7 @@ func (ch *CallbackHandler) handleSearchTorrentSelect(chatId int64, data string) 
 	index, err := strconv.Atoi(indexStr)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный индекс результата поиска: %s", chatId, indexStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный индекс результата", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidResultIndex), nil)
 
 		return
 	}
@@ -536,7 +536,7 @@ func (ch *CallbackHandler) handleAddTorrentClient(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -668,7 +668,7 @@ func (ch *CallbackHandler) handleClientDetails(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -681,7 +681,7 @@ func (ch *CallbackHandler) handleDeleteClient(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -694,7 +694,7 @@ func (ch *CallbackHandler) handleConfirmDelete(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -707,7 +707,7 @@ func (ch *CallbackHandler) handleEditClient(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -720,7 +720,7 @@ func (ch *CallbackHandler) handleCheckClient(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -733,7 +733,7 @@ func (ch *CallbackHandler) handleRecheckClient(chatId int64, data string) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверный ID клиента: %s", chatId, clientIDStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверный ID клиента", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidClientID), nil)
 
 		return
 	}
@@ -746,7 +746,7 @@ func (ch *CallbackHandler) handleSpeedLimitSelection(chatId int64, data string) 
 	speedMBx100, err := strconv.ParseInt(speedStr, 10, 64)
 	if err != nil {
 		logger.Warn("Пользователь %d отправил неверное значение скорости: %s", chatId, speedStr)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Ошибка: неверное значение скорости", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorInvalidSpeedValue), nil)
 
 		return
 	}

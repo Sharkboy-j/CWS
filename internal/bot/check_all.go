@@ -38,7 +38,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		errorText := "❌ Ошибка при получении списка клиентов"
+		errorText := ui.Msg(ui.MsgCheckAllClientsListError)
 		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
 		if sendErr == nil {
 			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -48,7 +48,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	}
 
 	if len(clients) == 0 {
-		errorText := "📋 *Проверка активных торрентов*\n\nКлиенты не найдены. Добавьте клиента для проверки."
+		errorText := ui.Msg(ui.MsgCheckAllNoClients)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.AddClient),
@@ -69,7 +69,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 	delete(ch.checkResultsCache, chatId)
 
-	checkingText := fmt.Sprintf("🔍 Проверка активных торрентов для *%d* клиентов...", len(clients))
+	checkingText := ui.Msgf(ui.MsgCheckAllCheckingNClients, len(clients))
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, checkingText, nil)
 	if err != nil {
 		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
@@ -81,7 +81,7 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 	var results []ClientCheckResult
 	for i, client := range clients {
-		progressText := fmt.Sprintf("🔍 Проверка клиентов...\n\n*%d* из *%d*\n\nПроверка: *%s*", i+1, len(clients), client.Name)
+		progressText := ui.Msgf(ui.MsgCheckAllCheckingClientsProgress, i+1, len(clients), client.Name)
 		newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, progressText, nil)
 		if err == nil {
 			messageID = newMessageID
@@ -145,7 +145,7 @@ func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
 	cache, exists := ch.checkResultsCache[chatId]
 	if !exists || cache == nil {
 		logger.Warn("Пользователь %d запросил страницу %d, но кэш результатов отсутствует", chatId, page)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "Результаты проверки устарели. Запустите проверку заново.", nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgCheckAllResultsStale), nil)
 
 		return
 	}
@@ -178,7 +178,7 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.
 		ClientName: client.Name,
 	}
 
-	checkingText := fmt.Sprintf("🔍 Проверка активных торрентов для клиента *%s*...", client.Name)
+	checkingText := ui.Msgf(ui.MsgCheckAllSingleClientChecking, client.Name)
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, checkingText, nil)
 	if err == nil {
 		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
@@ -189,13 +189,13 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка подключения: %v", err)
 		result.Duration = time.Since(startTime)
-		errorText := fmt.Sprintf("❌ Ошибка при подключении к клиенту *%s*:\n`%v`", client.Name, err)
+		errorText := ui.Msgf(ui.MsgCheckAllSingleClientConnectError, client.Name, err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
 
 		return result
 	}
 
-	connectingText := fmt.Sprintf("✅ Подключение к *%s* успешно\n\n🔍 Получение списка активных торрентов...", client.Name)
+	connectingText := ui.Msgf(ui.MsgCheckAllSingleClientConnectOKGetting, client.Name)
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, connectingText, nil)
 	if err == nil {
 		messageID = newMessageID
@@ -205,14 +205,14 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка получения торрентов: %v", err)
 		result.Duration = time.Since(startTime)
-		errorText := fmt.Sprintf("❌ Ошибка при получении торрентов от клиента *%s*:\n`%v`", client.Name, err)
+		errorText := ui.Msgf(ui.MsgCheckAllSingleClientGetTorrentsError, client.Name, err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
 
 		return result
 	}
 	result.ActiveTorrents = len(activeTorrents)
 
-	filteringText := fmt.Sprintf("✅ Подключение к *%s* успешно\n\n🔍 Получено активных торрентов: *%d*\n\n🔍 Фильтрация по комментарию (rutracker)...", client.Name, len(activeTorrents))
+	filteringText := ui.Msgf(ui.MsgCheckAllSingleClientFiltering, client.Name, len(activeTorrents))
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, filteringText, nil)
 	if err == nil {
 		messageID = newMessageID
@@ -222,7 +222,7 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка фильтрации: %v", err)
 		result.Duration = time.Since(startTime)
-		errorText := fmt.Sprintf("❌ Ошибка при фильтрации торрентов от клиента *%s*:\n`%v`", client.Name, err)
+		errorText := ui.Msgf(ui.MsgCheckAllSingleClientFilterError, client.Name, err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
 
 		return result
@@ -240,7 +240,7 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.
 		torrentByHash[torrent.InfohashV1] = torrent
 	}
 
-	checkingRutrackerText := fmt.Sprintf("✅ Подключение к *%s* успешно\n\n🔍 Получено активных торрентов: *%d*\n\n✅ Отфильтровано по rutracker: *%d*\n\n🔍 Проверка хешей в API рутрекера...", client.Name, len(activeTorrents), len(torrents))
+	checkingRutrackerText := ui.Msgf(ui.MsgCheckAllSingleClientCheckingRutracker, client.Name, len(activeTorrents), len(torrents))
 	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, checkingRutrackerText, nil)
 	if err == nil {
 		messageID = newMessageID
@@ -252,7 +252,7 @@ func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.
 	if err != nil {
 		result.Error = fmt.Sprintf("Ошибка API рутрекера: %v", err)
 		result.Duration = time.Since(startTime)
-		errorText := fmt.Sprintf("❌ Ошибка при проверке хешей в API рутрекера от клиента *%s*:\n`%v`", client.Name, err)
+		errorText := ui.Msgf(ui.MsgCheckAllSingleClientRutrackerAPIError, client.Name, err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, messageID, errorText, nil)
 
 		return result
@@ -287,42 +287,41 @@ func (ch *ClientHandler) collectAllMissingTorrents(results []ClientCheckResult) 
 
 func (ch *ClientHandler) formatAllClientsResult(ctx context.Context, chatId int64, results []ClientCheckResult, totalDuration time.Duration, lastCheckTime *time.Time, page int) (string, *tgbotapi.InlineKeyboardMarkup) {
 	var text strings.Builder
-	text.WriteString("📊 *Результаты проверки всех клиентов*\n\n")
-	text.WriteString(fmt.Sprintf("⏱ Общее время: *%s*\n", formatDuration(totalDuration)))
+	text.WriteString(ui.Msg(ui.MsgCheckAllResultsHeader))
+	text.WriteString(ui.Msgf(ui.MsgCheckAllResultsTotalTimeFmt, formatDuration(totalDuration)))
 	if lastCheckTime != nil {
 		formattedTime := ch.formatTimeInUserTimezone(ctx, chatId, *lastCheckTime)
-		text.WriteString(fmt.Sprintf("🕐 Последняя проверка: *%s*\n", formattedTime))
+		text.WriteString(ui.Msgf(ui.MsgCheckAllResultsLastCheckFmt, formattedTime))
 	}
-	text.WriteString("\n---\n\n")
+	text.WriteString(ui.Msg(ui.MsgCheckAllResultsSeparator))
 
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
 
 	for _, result := range results {
 		if result.Error != "" {
-			text.WriteString(fmt.Sprintf("❌ *%s*\n", result.ClientName))
-			text.WriteString(fmt.Sprintf("   `%s`\n\n", result.Error))
+			text.WriteString(ui.Msgf(ui.MsgCheckAllResultsClientErrorFmt, result.ClientName, result.Error))
 		} else {
-			text.WriteString(fmt.Sprintf("💻 *%s*\n", result.ClientName))
-			text.WriteString(fmt.Sprintf("   📊 Активных: *%d*\n", result.ActiveTorrents))
-			text.WriteString(fmt.Sprintf("   🔍 Отфильтровано: *%d*\n", result.FilteredTorrents))
-			text.WriteString(fmt.Sprintf("   ✅ Актуальных: *%d*/*%d*\n", result.FoundInRutracker, result.FilteredTorrents))
+			text.WriteString(ui.Msgf(ui.MsgCheckAllResultsClientLineFmt, result.ClientName))
+			text.WriteString(ui.Msgf(ui.MsgCheckAllResultsActiveFmt, result.ActiveTorrents))
+			text.WriteString(ui.Msgf(ui.MsgCheckAllResultsFilteredFmt, result.FilteredTorrents))
+			text.WriteString(ui.Msgf(ui.MsgCheckAllResultsActualFmt, result.FoundInRutracker, result.FilteredTorrents))
 			if len(result.MissingTorrents) > 0 {
-				text.WriteString(fmt.Sprintf("   ⚠️ Не найдено: *%d*\n\n", len(result.MissingTorrents)))
+				text.WriteString(ui.Msgf(ui.MsgCheckAllResultsMissingCountFmt, len(result.MissingTorrents)))
 
 				maxDisplay := 20
 				displayCount := len(result.MissingTorrents)
 				if displayCount > maxDisplay {
 					displayCount = maxDisplay
-					text.WriteString(fmt.Sprintf("   _Показано первых %d из %d:_\n\n", maxDisplay, len(result.MissingTorrents)))
+					text.WriteString(ui.Msgf(ui.MsgCheckAllResultsMissingShownFirstFmt, maxDisplay, len(result.MissingTorrents)))
 				}
 
 				for i := 0; i < displayCount; i++ {
 					info := result.MissingTorrents[i]
-					text.WriteString(fmt.Sprintf("   • `%s`\n     `%s`\n", info.name, info.hash))
+					text.WriteString(ui.Msgf(ui.MsgCheckAllResultsMissingItemFmt, info.name, info.hash))
 				}
 				text.WriteString("\n")
 			}
-			text.WriteString(fmt.Sprintf("   ⏱ *%s*\n\n", formatDuration(result.Duration)))
+			text.WriteString(ui.Msgf(ui.MsgCheckAllResultsDurationFmt, formatDuration(result.Duration)))
 		}
 	}
 

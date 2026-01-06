@@ -5,7 +5,6 @@ import (
 	"cws/internal/bot/ui"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -49,14 +48,14 @@ func (dh *DocumentHandler) HandleDocument(ctx context.Context, chatId int64, doc
 	}
 
 	if !strings.HasSuffix(strings.ToLower(document.FileName), ".torrent") {
-		_, _ = dh.msgSender.SendOrEdit(chatId, 0, "❌ Пожалуйста, отправьте файл с расширением .torrent", nil)
+		_, _ = dh.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorSendTorrentFilePrompt), nil)
 
 		return
 	}
 
 	logger.Debugf("Пользователь %d отправил торрент файл %s для клиента %d", chatId, document.FileName, clientID)
 
-	text := fmt.Sprintf("📥 *Обработка торрент файла*\n\n📎 Файл: `%s`\n\n⏳ Обрабатываю...", document.FileName)
+	text := ui.Msgf(ui.MsgDocumentProcessingTorrentFileFmt, document.FileName)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),
