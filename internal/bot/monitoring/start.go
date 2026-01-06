@@ -43,7 +43,6 @@ func (tms *torrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 			tms.setMenuMessage(chatId, newMessageID)
 			monitor.MessageID = newMessageID
 		} else {
-			// If SendOrEdit didn't return a new id, keep the current one.
 			monitor.MessageID = messageID
 		}
 	}
@@ -168,12 +167,8 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
 
-	// Ensure we only update the message that belongs to this monitoring session.
-	// If the user's current menu message differs, it means the user navigated
-	// away and we must not override their view.
 	currentMenuMsgID := tms.getMenuMessage(monitor.ChatID)
 	if currentMenuMsgID != 0 && monitor.MessageID != 0 && currentMenuMsgID != monitor.MessageID {
-		// User left the monitoring menu — skip updating to avoid returning them back.
 		logger.Debug("User %d left monitoring menu (menu msg id changed from %d to %d), skipping update", monitor.ChatID, monitor.MessageID, currentMenuMsgID)
 
 		return
@@ -199,7 +194,6 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 		progress = torrent.Progress * 100
 	case "uploading":
 		status = "⬆️ Раздача"
-		// uploading reported progress may be 1.0, but keep using 100% for clarity
 		progress = 100.0
 	case "stalledUP":
 		status = "⚠️ Раздача (застой)"
@@ -226,7 +220,6 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 		status = "⚠️ Отсутствуют файлы"
 		progress = torrent.Progress * 100
 	default:
-		// Fallback: show original state string prefixed with info emoji.
 		status = "ℹ️ " + string(torrent.State)
 		progress = torrent.Progress * 100
 	}
@@ -256,8 +249,8 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 	}
 
 	text := "📊 *Прогресс торрента*\n\n"
-	text += fmt.Sprintf("Клиент: *%s*\n\n", textutil.EscapeMarkdown(clientName))
-	text += fmt.Sprintf("📁 *%s*\n\n", textutil.EscapeMarkdown(torrent.Name))
+	text += fmt.Sprintf(" *%s*\n\n", textutil.EscapeMarkdown(torrent.Name))
+	text += fmt.Sprintf("📁 *%s*\n\n", textutil.EscapeMarkdown(torrent.DownloadPath))
 	text += fmt.Sprintf("Статус: %s\n", status)
 	text += fmt.Sprintf("Прогресс: *%.1f%%*\n\n", progress)
 	text += fmt.Sprintf("⬇️ Загрузка: %s\n", formatSpeed(torrent.DlSpeed))

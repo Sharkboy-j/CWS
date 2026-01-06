@@ -46,7 +46,7 @@ func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
 			hash := strings.TrimPrefix(args, "monitor_")
 			hash = strings.TrimSpace(hash)
 			if hash != "" {
-				ch.clientHdlr.ShowClientsForTorrentMonitorWithHash(chatId, hash)
+				ch.clientHdlr.ShowClientsForTorrentMonitor(chatId, hash)
 
 				return
 			}

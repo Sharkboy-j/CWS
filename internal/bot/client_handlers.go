@@ -266,7 +266,7 @@ func (ch *ClientHandler) ShowClientsForTorrentAdd(chatId int64) {
 	}
 }
 
-func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
+func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64, hash string) {
 	ctx := context.Background()
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
 	if err != nil {
@@ -307,65 +307,7 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
 				fmt.Sprintf("%s %s", sslText, client.Name),
-				fmt.Sprintf("monitor_torrent_client_%d", client.ID),
-			),
-		))
-	}
-
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		ui.Button(ui.MainMenu),
-	))
-
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-	messageID := ch.stateMgr.GetMenuMessage(chatId)
-	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-	if err == nil {
-		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
-	}
-}
-
-func (ch *ClientHandler) ShowClientsForTorrentMonitorWithHash(chatId int64, hash string) {
-	ctx := context.Background()
-	clients, err := ch.repo.GetAllClients(ctx, chatId)
-	if err != nil {
-		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, "❌ Ошибка при получении списка клиентов", nil)
-
-		return
-	}
-
-	if len(clients) == 0 {
-		errorText := "📊 *Мониторинг торрента*\n\nКлиенты не найдены. Добавьте клиента для мониторинга."
-		keyboard := tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(
-				ui.Button(ui.AddClient),
-			),
-			tgbotapi.NewInlineKeyboardRow(
-				ui.Button(ui.MainMenu),
-			),
-		)
-		messageID := ch.stateMgr.GetMenuMessage(chatId)
-		newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, errorText, &keyboard)
-		if sendErr == nil {
-			ch.stateMgr.SetMenuMessage(chatId, newMessageID)
-		}
-
-		return
-	}
-
-	text := "📊 *Мониторинг торрента*\n\nВыберите клиент:"
-	var rows [][]tgbotapi.InlineKeyboardButton
-
-	for _, client := range clients {
-		sslText := "🔒"
-		if !client.SSL {
-			sslText = "🔓"
-		}
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			ui.Data(
-				fmt.Sprintf("%s %s", sslText, client.Name),
-				fmt.Sprintf("monitor_torrent_start_%d_%s", client.ID, hash),
-			),
+				fmt.Sprintf("monitor_torrent_start_%d_%s", client.ID, hash)),
 		))
 	}
 
@@ -407,7 +349,6 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 					}
 				}
 			}
-			// Build full list of monitor items (we'll paginate the view).
 			var monitorItems []TorrentMonitorItem
 			for _, torrent := range sortedTorrents {
 				hash := torrent.InfohashV1
@@ -428,7 +369,6 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 					Torrents: monitorItems,
 				}
 
-				// show first page (page 0)
 				ch.stateMgr.SetUserState(chatId, fmt.Sprintf("monitor_torrent_hash_%d", clientID))
 				ch.ShowTorrentMonitorPage(chatId, clientID, 0)
 
@@ -440,7 +380,6 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 	ch.StartTorrentMonitorManualInput(chatId, clientID)
 }
 
-// ShowTorrentMonitorPage renders a page of torrents for monitoring selection.
 func (ch *ClientHandler) ShowTorrentMonitorPage(chatId int64, clientID int64, page int) {
 	cache, exists := ch.torrentMonitorCache[chatId]
 	if !exists || cache == nil || cache.ClientID != clientID || len(cache.Torrents) == 0 {
@@ -451,7 +390,6 @@ func (ch *ClientHandler) ShowTorrentMonitorPage(chatId int64, clientID int64, pa
 	}
 
 	ctx := context.Background()
-	// determine page size from user's recommended torrents setting (default 3)
 	pageSize := 3
 	if cnt, err := ch.repo.GetRecommendedTorrents(ctx, chatId); err == nil && cnt > 0 {
 		pageSize = cnt
@@ -481,7 +419,6 @@ func (ch *ClientHandler) ShowTorrentMonitorPage(chatId int64, clientID int64, pa
 		if len(name) > 40 {
 			name = name[:37] + "..."
 		}
-		// use global index in callback so handler can find correct hash
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
 				fmt.Sprintf("📁 %s", name),
@@ -490,7 +427,6 @@ func (ch *ClientHandler) ShowTorrentMonitorPage(chatId int64, clientID int64, pa
 		))
 	}
 
-	// pagination buttons
 	var navRow []tgbotapi.InlineKeyboardButton
 	if page > 0 {
 		navRow = append(navRow, ui.ButtonWithData(ui.PrevPage, fmt.Sprintf("monitor_torrent_page_%d_%d", clientID, page-1)))
@@ -876,7 +812,6 @@ func (ch *ClientHandler) ShowDeleteExistingTorrentQuestion(chatId int64, clientI
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
-// ShowDeleteFilesQuestion показывает вопрос об удалении файлов вместе с торрентом
 func (ch *ClientHandler) ShowDeleteFilesQuestion(chatId int64, clientID int64, hash string) {
 	text := "🗑️ *Удаление торрента*\n\n❓ Удалить файлы вместе с торрентом?\n\n_Если выбрать \"Да\", файлы будут удалены с диска._"
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(

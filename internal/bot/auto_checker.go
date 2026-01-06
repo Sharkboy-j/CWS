@@ -69,7 +69,7 @@ func (ac *AutoChecker) runCheck(ctx context.Context) {
 		}
 
 		logger.Debug("Автоматическая проверка для пользователя %d", userID)
-		ac.clientHdlr.CheckAllClientsAuto(userID)
+		ac.clientHdlr.CheckAllClients(userID)
 		ac.lastCheck[userID] = time.Now()
 	}
 

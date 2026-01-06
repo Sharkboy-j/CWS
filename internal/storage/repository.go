@@ -217,8 +217,6 @@ func (r *Repository) SetUserState(ctx context.Context, userID int64, state strin
 	return nil
 }
 
-// verifyRecommendedTorrents reads back stored value and logs it for debugging.
-
 func (r *Repository) GetUserState(ctx context.Context, userID int64) (string, error) {
 	logger.Debug("Получение состояния для пользователя %d", userID)
 	query := `SELECT state FROM user_states WHERE user_id = $1`
@@ -325,7 +323,6 @@ func (r *Repository) SetMenuMessageID(ctx context.Context, userID int64, message
 		}
 	}
 
-	// spawn verification read to help debug eventual inconsistencies
 	go func() {
 		var val sql.NullInt64
 
@@ -654,7 +651,6 @@ func (r *Repository) GetUserTimezone(ctx context.Context, userID int64) (string,
 	return timezone.String, nil
 }
 
-// SetRecommendedTorrents saves the user's preferred number of recommended torrents.
 func (r *Repository) SetRecommendedTorrents(ctx context.Context, userID int64, count int) error {
 	logger.Debugf("Сохранение recommended_torrents_count для пользователя %d: %d", userID, count)
 	query := `UPDATE user_states 
@@ -667,38 +663,10 @@ func (r *Repository) SetRecommendedTorrents(ctx context.Context, userID int64, c
 
 		return fmt.Errorf("failed to set recommended torrents: %w", err)
 	}
-	//
-	//rowsAffected, err := result.RowsAffected()
-	//if err != nil {
-	//	logger.Error("Ошибка при получении количества обновленных строк для recommended_torrents_count: %v", err)
-	//
-	//	return fmt.Errorf("failed to get rows affected: %w", err)
-	//}
-	//logger.Debugf("SetRecommendedTorrents: update affected rows=%d for user %d", rowsAffected, userID)
-	//
-	//if rowsAffected == 0 {
-	//	query = `INSERT INTO user_states (user_id, state, recommended_torrents_count, updated_at)
-	//	         VALUES ($1, '', $2, NOW())
-	//	         ON CONFLICT (user_id)
-	//	         DO UPDATE SET recommended_torrents_count = $2, updated_at = NOW()`
-	//	res, execErr := r.db.ExecContext(ctx, query, userID, count)
-	//	if execErr != nil {
-	//		logger.Error("Ошибка при создании/обновлении записи с recommended_torrents_count для пользователя %d: %v", userID, execErr)
-	//
-	//		return fmt.Errorf("failed to insert/update recommended torrents: %w", execErr)
-	//	}
-	//	ra, raErr := res.RowsAffected()
-	//	if raErr != nil {
-	//		logger.Debugf("SetRecommendedTorrents: insert exec succeeded but cannot get rows affected for user %d: %v", userID, raErr)
-	//	} else {
-	//		logger.Debugf("SetRecommendedTorrents: insert affected rows=%d for user %d", ra, userID)
-	//	}
-	//}
 
 	return nil
 }
 
-// GetRecommendedTorrents returns user's preferred number of recommended torrents, default 3.
 func (r *Repository) GetRecommendedTorrents(ctx context.Context, userID int64) (int, error) {
 	logger.Debug("Получение recommended_torrents_count для пользователя %d", userID)
 	query := `SELECT recommended_torrents_count FROM user_states WHERE user_id = $1`

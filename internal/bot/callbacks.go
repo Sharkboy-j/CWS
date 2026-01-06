@@ -34,8 +34,6 @@ func (ch *CallbackHandler) SetCommandHandler(cmdHdlr *CommandHandler) {
 	ch.cmdHdlr = cmdHdlr
 }
 
-// parseClientIDAndGetTorrentCache parses client ID and returns the torrent file cache for the chat.
-// Returns (clientID, cache, true) on success, otherwise sends an error message and returns false.
 func (ch *CallbackHandler) parseClientIDAndGetTorrentCache(chatId int64, clientIDStr string) (int64, *TorrentFileCache, bool) {
 	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
@@ -171,7 +169,6 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		logger.Debugf("Пользователь %d запросил страницу %d результатов поиска", chatId, page)
 		ch.clientHdlr.torrentSearchSvc.ShowSearchResultsPage(chatId, page)
 	case strings.HasPrefix(data, "monitor_torrent_page_"):
-		// Format: monitor_torrent_page_{clientID}_{page}
 		rest := strings.TrimPrefix(data, "monitor_torrent_page_")
 		parts := strings.SplitN(rest, "_", 2)
 		if len(parts) != 2 {

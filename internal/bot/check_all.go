@@ -96,16 +96,28 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 
 	elapsed := time.Since(startTime)
 	now := time.Now()
+	_, err = ch.sendAllClientsCheckResult(ctx, chatId, messageID, results, elapsed, now)
+	if err != nil {
+		return
+	}
 
+	logger.Debugf("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+
+	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
+}
+
+func (ch *ClientHandler) sendAllClientsCheckResult(ctx context.Context, chatId int64, messageID int,
+	results []ClientCheckResult, elapsed time.Duration, now time.Time) (int, error) {
 	allMissingTorrents := ch.collectAllMissingTorrents(results)
+	nowCopy := now
 	ch.checkResultsCache[chatId] = &CheckResultsCache{
 		Results:            results,
 		TotalDuration:      elapsed,
-		LastCheckTime:      &now,
+		LastCheckTime:      &nowCopy,
 		AllMissingTorrents: allMissingTorrents,
 	}
 
-	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &now, 0)
+	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &nowCopy, 0)
 
 	var keyboardRows [][]tgbotapi.InlineKeyboardButton
 	if resultKeyboard != nil {
@@ -117,17 +129,15 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	))
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
-	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
+	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, resultText, &keyboard)
 	if err != nil {
-		logger.Error("Ошибка при обновлении сообщения для пользователя %d: %v", chatId, err)
+		logger.Error("Ошибка при обновлении/отправке сообщения для пользователя %d: %v", chatId, err)
 
-		return
+		return 0, err
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 
-	logger.Debugf("Пользователь %d получил результат проверки всех клиентов: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
-
-	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
+	return newMessageID, nil
 }
 
 func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
@@ -160,148 +170,6 @@ func (ch *ClientHandler) ShowMissingTorrentsPage(chatId int64, page int) {
 		return
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
-}
-
-func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
-	ctx := context.Background()
-	messageID := ch.stateMgr.GetMenuMessage(chatId)
-
-	clients, err := ch.repo.GetAllClients(ctx, chatId)
-	if err != nil {
-		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-
-		return
-	}
-
-	if len(clients) == 0 {
-		logger.Debug("Нет клиентов для пользователя %d", chatId)
-
-		return
-	}
-
-	startTime := time.Now()
-
-	delete(ch.checkResultsCache, chatId)
-
-	statusText := fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Начинаю проверку %d клиентов...", len(clients))
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.MainMenu),
-		),
-	)
-	var newMessageID int
-	newMessageID, _ = ch.msgSender.SendOrEdit(chatId, messageID, statusText, &keyboard)
-	if newMessageID > 0 {
-		messageID = newMessageID
-		ch.stateMgr.SetMenuMessage(chatId, messageID)
-	}
-
-	var results []ClientCheckResult
-	for i, client := range clients {
-		statusText = fmt.Sprintf("🔍 *Автоматическая проверка*\n\n⏳ Проверяю клиентов...\n\n✅ Проверено: %d/%d\n🔍 Проверяю: *%s*", i, len(clients), client.Name)
-		newMessageID, _ = ch.msgSender.SendOrEdit(chatId, messageID, statusText, &keyboard)
-		if newMessageID > 0 {
-			messageID = newMessageID
-		}
-
-		result := ch.checkSingleClientSilent(ctx, client)
-		results = append(results, result)
-	}
-
-	elapsed := time.Since(startTime)
-	now := time.Now()
-
-	allMissingTorrents := ch.collectAllMissingTorrents(results)
-	ch.checkResultsCache[chatId] = &CheckResultsCache{
-		Results:            results,
-		TotalDuration:      elapsed,
-		LastCheckTime:      &now,
-		AllMissingTorrents: allMissingTorrents,
-	}
-
-	resultText, resultKeyboard := ch.formatAllClientsResult(ctx, chatId, results, elapsed, &now, 0)
-
-	var keyboardRows [][]tgbotapi.InlineKeyboardButton
-	if resultKeyboard != nil {
-		keyboardRows = resultKeyboard.InlineKeyboard
-	}
-	keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
-		ui.Button(ui.RepeatCheck),
-		ui.Button(ui.MainMenu),
-	))
-	finalKeyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
-
-	newMessageID, err = ch.msgSender.SendOrEdit(chatId, messageID, resultText, &finalKeyboard)
-	if err != nil {
-		logger.Error("Ошибка при обновлении/отправке сообщения для пользователя %d: %v", chatId, err)
-
-		return
-	}
-
-	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
-
-	logger.Debugf("Автоматическая проверка завершена для пользователя %d: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
-
-	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
-}
-
-func (ch *ClientHandler) checkSingleClientSilent(ctx context.Context, client *storage.Client) ClientCheckResult {
-	startTime := time.Now()
-	result := ClientCheckResult{
-		ClientName: client.Name,
-	}
-
-	qbClient, err := qbit.New(ctx, client)
-	if err != nil {
-		result.Error = fmt.Sprintf("Ошибка подключения: %v", err)
-		result.Duration = time.Since(startTime)
-
-		return result
-	}
-
-	activeTorrents, err := qbClient.GetTorrents(ctx)
-	if err != nil {
-		result.Error = fmt.Sprintf("Ошибка получения торрентов: %v", err)
-		result.Duration = time.Since(startTime)
-
-		return result
-	}
-	result.ActiveTorrents = len(activeTorrents)
-
-	torrents, err := qbClient.FilterTorrentsByRutrackerComment(ctx, activeTorrents)
-	if err != nil {
-		result.Error = fmt.Sprintf("Ошибка фильтрации: %v", err)
-		result.Duration = time.Since(startTime)
-
-		return result
-	}
-	result.FilteredTorrents = len(torrents)
-
-	if len(torrents) == 0 {
-		result.Duration = time.Since(startTime)
-
-		return result
-	}
-
-	torrentByHash := make(map[string]qbittorrent.Torrent)
-	for _, torrent := range torrents {
-		torrentByHash[torrent.InfohashV1] = torrent
-	}
-
-	hashBatches := qbit.GetHashStrings(torrents)
-
-	rutrackerResults, err := rutracker.GetIdByHashes(hashBatches, ch.cfg)
-	if err != nil {
-		result.Error = fmt.Sprintf("Ошибка API рутрекера: %v", err)
-		result.Duration = time.Since(startTime)
-
-		return result
-	}
-
-	result.FoundInRutracker, result.MissingTorrents = processRutrackerResults(ctx, qbClient, torrentByHash, rutrackerResults)
-	result.Duration = time.Since(startTime)
-
-	return result
 }
 
 func (ch *ClientHandler) checkSingleClient(ctx context.Context, client *storage.Client, chatId int64, messageID int) ClientCheckResult {

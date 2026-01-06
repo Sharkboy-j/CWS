@@ -10,7 +10,6 @@ type hashAndNum struct {
 	Result map[string]*int `json:"result"`
 }
 
-// GetIdByHashes принимает массив строк, где каждая строка содержит хеши через запятую (до 99 штук)
 func GetIdByHashes(hashes []string, cfg *config.Config) (map[string]*int, error) {
 	fullHashSet := make(map[string]*int)
 
