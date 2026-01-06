@@ -43,6 +43,9 @@ func (dh *DialogHandler) StartAddClientDialog(chatId int64) {
 		),
 	)
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
+	if messageID == 0 {
+		messageID = dh.stateMgr.GetMenuMessage(chatId)
+	}
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
@@ -113,7 +116,6 @@ func (dh *DialogHandler) HandleMessage(message *tgbotapi.Message) {
 	}
 }
 
-// handleEditRecommendedTorrentsInput processes custom numeric input for recommended torrents.
 func (dh *DialogHandler) handleEditRecommendedTorrentsInput(chatId int64, text string) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -346,10 +348,11 @@ func (dh *DialogHandler) FinishAddClient(chatId int64, ssl bool) {
 		chatId, createdClient.ID, createdClient.Name, createdClient.Host, createdClient.Port)
 
 	dialogMessageID := dh.stateMgr.GetDialogMessage(chatId)
-	if dialogMessageID > 0 {
+	menuMessageID := dh.stateMgr.GetMenuMessage(chatId)
+	if dialogMessageID > 0 && dialogMessageID != menuMessageID {
 		dh.msgSender.DeleteMessage(chatId, dialogMessageID)
-		dh.stateMgr.SetDialogMessage(chatId, 0)
 	}
+	dh.stateMgr.SetDialogMessage(chatId, 0)
 
 	dh.stateMgr.DeleteUserState(chatId)
 
@@ -384,6 +387,9 @@ func (dh *DialogHandler) StartEditClientDialog(chatId int64, clientID int64) {
 		),
 	)
 	messageID := dh.stateMgr.GetDialogMessage(chatId)
+	if messageID == 0 {
+		messageID = dh.stateMgr.GetMenuMessage(chatId)
+	}
 	newMessageID, err := dh.msgSender.SendOrEdit(chatId, messageID, messageText, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)

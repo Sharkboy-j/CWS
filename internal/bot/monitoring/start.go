@@ -140,8 +140,6 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 			tgbotapi.NewInlineKeyboardButtonURL(ui.Msg(ui.MsgTorrentMonitorOpenTorrentButtonText), torrentURL),
 		))
 	}
-	// Determine whether torrent is actively transferring. If active, show Pause;
-	// otherwise show Resume. Treat stalled states as active too (user can stop them).
 	stateStr := string(torrent.State)
 	lowerState := strings.ToLower(stateStr)
 	isActive := lowerState == "downloading" ||
@@ -226,7 +224,7 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 
 	text := ui.Msg(ui.MsgTorrentProgressHeaderText)
 	text += ui.Msgf(ui.MsgTorrentProgressNameFmt, textutil.EscapeMarkdown(torrent.Name))
-	text += ui.Msgf(ui.MsgTorrentProgressPathFmt, textutil.EscapeMarkdown(torrent.DownloadPath))
+	text += ui.Msgf(ui.MsgTorrentProgressPathFmt, textutil.EscapeMarkdown(torrent.SavePath))
 	text += ui.Msgf(ui.MsgTorrentProgressStatusFmt, status)
 	text += ui.Msgf(ui.MsgTorrentProgressPercentFmt, progress)
 	text += ui.Msgf(ui.MsgTorrentProgressDownloadFmt, ui.FormatSpeedBytes(torrent.DlSpeed))

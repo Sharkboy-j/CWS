@@ -89,10 +89,22 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.clientHdlr.CheckAllClients(chatId)
 	case data == "quick_actions":
 		ch.clientHdlr.ShowQuickActionsMenu(chatId)
+	case data == "quick_action_pause_menu":
+		ch.clientHdlr.ShowPauseTorrentsMenu(chatId)
+	case data == "quick_action_resume_menu":
+		ch.clientHdlr.ShowResumeTorrentsMenu(chatId)
 	case data == "quick_action_pause_all":
 		ch.clientHdlr.HandlePauseAllTorrents(chatId)
 	case data == "quick_action_resume_all":
 		ch.clientHdlr.HandleResumeAllTorrents(chatId)
+	case data == "quick_action_pause_rutracker":
+		ch.clientHdlr.HandlePauseRutrackerTorrents(chatId)
+	case data == "quick_action_resume_rutracker":
+		ch.clientHdlr.HandleResumeRutrackerTorrents(chatId)
+	case data == "quick_action_pause_non_rutracker":
+		ch.clientHdlr.HandlePauseNonRutrackerTorrents(chatId)
+	case data == "quick_action_resume_non_rutracker":
+		ch.clientHdlr.HandleResumeNonRutrackerTorrents(chatId)
 	case data == "quick_action_limit_speed_menu":
 		ch.clientHdlr.ShowSpeedLimitMenu(chatId)
 	case strings.HasPrefix(data, "quick_action_limit_speed_"):
@@ -205,12 +217,16 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		logger.Debugf("Пользователь %d отменил добавление клиента", chatId)
 		ch.stateMgr.DeleteUserState(chatId)
 		ch.stateMgr.SetDialogMessage(chatId, 0)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgAddClientCancelled), nil)
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.HandleClientsCommand(chatId)
+		}
 	case data == "cancel_edit_client":
 		logger.Debugf("Пользователь %d отменил редактирование клиента", chatId)
 		ch.stateMgr.DeleteUserState(chatId)
 		ch.stateMgr.SetDialogMessage(chatId, 0)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgEditClientCancelled), nil)
+		if ch.cmdHdlr != nil {
+			ch.cmdHdlr.HandleClientsCommand(chatId)
+		}
 	case data == "set_ssl_true":
 		ch.dialogHdlr.FinishAddClient(chatId, true)
 	case data == "set_ssl_false":

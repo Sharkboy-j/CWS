@@ -32,12 +32,36 @@ func StartNotifyBot(ctx context.Context, bot *tgbotapi.BotAPI, repo *storage.Rep
 
 			return
 		case update := <-updates:
-			if update.CallbackQuery == nil {
+			if update.Message != nil {
+				handleNotifyMessage(ctx, sender, repo, update.Message)
+
 				continue
 			}
-			handleNotifyCallback(ctx, bot, sender, repo, update.CallbackQuery)
+
+			if update.CallbackQuery != nil {
+				handleNotifyCallback(ctx, bot, sender, repo, update.CallbackQuery)
+			}
 		}
 	}
+}
+
+func handleNotifyMessage(ctx context.Context, sender messaging.MessageSender, repo *storage.Repository, msg *tgbotapi.Message) {
+	if msg == nil || msg.Chat == nil {
+		return
+	}
+
+	if !msg.IsCommand() || msg.Command() != "start" {
+		return
+	}
+
+	chatId := msg.Chat.ID
+	if err := repo.SetNotifyBotSubscribed(ctx, chatId, true); err != nil {
+		logger.Warn("Failed to set notify bot subscribed for user %d: %v", chatId, err)
+
+		return
+	}
+
+	_, _ = sender.SendOrEdit(chatId, 0, "✅ Notifications bot activated.", nil)
 }
 
 func handleNotifyCallback(ctx context.Context, bot *tgbotapi.BotAPI, sender messaging.MessageSender, repo *storage.Repository, query *tgbotapi.CallbackQuery) {

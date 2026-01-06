@@ -20,6 +20,7 @@ type CommandHandler struct {
 	msgSender      messaging.MessageSender
 	clientHdlr     *ClientHandler
 	isStartCommand bool // Track if current operation is from /start command
+	notifyBotUser  string
 }
 
 func NewCommandHandler(bot *tgbotapi.BotAPI, repo *storage.Repository, stateMgr *StateManager, msgSender messaging.MessageSender) *CommandHandler {
@@ -33,6 +34,10 @@ func NewCommandHandler(bot *tgbotapi.BotAPI, repo *storage.Repository, stateMgr 
 
 func (ch *CommandHandler) SetClientHandler(clientHdlr *ClientHandler) {
 	ch.clientHdlr = clientHdlr
+}
+
+func (ch *CommandHandler) SetNotifyBotUsername(username string) {
+	ch.notifyBotUser = strings.TrimSpace(username)
 }
 
 func (ch *CommandHandler) HandleCommand(message *tgbotapi.Message) {
@@ -117,26 +122,34 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 		}
 	}
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.CheckTorrents),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.QuickActionsMenu),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.SettingsMenu),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.AddTorrentFile),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.SearchTorrent),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.MonitorTorrent),
-		),
+	if text.Len() == 0 {
+		text.WriteString(ui.Msg(ui.MsgMainMenuNoClientsText))
+	}
+
+	var keyboardRows [][]tgbotapi.InlineKeyboardButton
+
+	if ch.notifyBotUser != "" {
+		subscribed, subErr := ch.repo.GetNotifyBotSubscribed(ctx, chatId)
+		if subErr != nil {
+			logger.Warn("Failed to read notify_bot_subscribed for user %d: %v", chatId, subErr)
+		} else if !subscribed {
+			url := "https://t.me/" + ch.notifyBotUser + "?start=subscribe"
+			keyboardRows = append(keyboardRows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonURL(ui.Text(ui.SubscribeNotifyBot), url),
+			))
+		}
+	}
+
+	keyboardRows = append(keyboardRows,
+		tgbotapi.NewInlineKeyboardRow(ui.Button(ui.CheckTorrents)),
+		tgbotapi.NewInlineKeyboardRow(ui.Button(ui.QuickActionsMenu)),
+		tgbotapi.NewInlineKeyboardRow(ui.Button(ui.SettingsMenu)),
+		tgbotapi.NewInlineKeyboardRow(ui.Button(ui.AddTorrentFile)),
+		tgbotapi.NewInlineKeyboardRow(ui.Button(ui.SearchTorrent)),
+		tgbotapi.NewInlineKeyboardRow(ui.Button(ui.MonitorTorrent)),
 	)
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text.String(), &keyboard)
 	if err != nil {

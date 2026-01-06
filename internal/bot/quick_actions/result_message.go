@@ -8,13 +8,14 @@ import (
 	"cws/logger"
 )
 
-func (h *Handler) sendOrEditResultWithMainMenu(
+func (h *Handler) sendOrEditResult(
 	chatId int64,
 	messageID int,
 	text string,
 	successCount int,
 	failCount int,
 	failedClients []string,
+	keyboard *tgbotapi.InlineKeyboardMarkup,
 ) bool {
 	if failCount > 0 {
 		text += ui.Msgf(ui.MsgResultErrorsHeaderFmt, failCount)
@@ -25,13 +26,7 @@ func (h *Handler) sendOrEditResultWithMainMenu(
 
 	text += ui.Msgf(ui.MsgResultTotalsFmt, successCount, failCount)
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.MainMenu),
-		),
-	)
-
-	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, keyboard)
 	if err != nil {
 		logger.Error("Error sending message for user %d: %v", chatId, err)
 
@@ -40,4 +35,21 @@ func (h *Handler) sendOrEditResultWithMainMenu(
 	h.stateMgr.SetMenuMessage(chatId, newMessageID)
 
 	return true
+}
+
+func (h *Handler) sendOrEditResultWithMainMenu(
+	chatId int64,
+	messageID int,
+	text string,
+	successCount int,
+	failCount int,
+	failedClients []string,
+) bool {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.MainMenu),
+		),
+	)
+
+	return h.sendOrEditResult(chatId, messageID, text, successCount, failCount, failedClients, &keyboard)
 }

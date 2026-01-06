@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 func (s *service) PauseAllTorrents(ctx context.Context) error {
@@ -49,6 +50,45 @@ func (s *service) ResumeAllTorrents(ctx context.Context) error {
 	}
 
 	logger.Info("All torrents resumed successfully")
+
+	return nil
+}
+
+func (s *service) PauseTorrents(ctx context.Context, hashes []string) error {
+	return s.torrentsAction(ctx, "/api/v2/torrents/stop", hashes, "pause")
+}
+
+func (s *service) ResumeTorrents(ctx context.Context, hashes []string) error {
+	return s.torrentsAction(ctx, "/api/v2/torrents/start", hashes, "resume")
+}
+
+func (s *service) torrentsAction(ctx context.Context, apiPath string, hashes []string, action string) error {
+	if len(hashes) == 0 {
+		return nil
+	}
+
+	const batchSize = 99
+	for i := 0; i < len(hashes); i += batchSize {
+		end := i + batchSize
+		if end > len(hashes) {
+			end = len(hashes)
+		}
+
+		data := url.Values{}
+		data.Set("hashes", strings.Join(hashes[i:end], "|"))
+
+		body, status, err := s.doForm(ctx, apiPath, data)
+		if err != nil {
+			logger.Error("Error during %s torrents: %v", action, err)
+
+			return fmt.Errorf("failed to %s torrents: %w", action, err)
+		}
+		if status != http.StatusOK {
+			logger.Error("Error during %s torrents: status %d, response: %s", action, status, string(body))
+
+			return fmt.Errorf("%s failed with status %d: %s", action, status, string(body))
+		}
+	}
 
 	return nil
 }

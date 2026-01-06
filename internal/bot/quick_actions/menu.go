@@ -81,10 +81,10 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 	text := ui.Msg(ui.MsgQuickActionsMenuText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.PauseAllTorrents),
+			ui.Button(ui.PauseTorrentsMenu),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.ResumeAllTorrents),
+			ui.Button(ui.ResumeTorrentsMenu),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.SpeedLimitMenu),
@@ -101,6 +101,76 @@ func (h *Handler) ShowQuickActionsMenu(chatId int64) {
 		return
 	}
 	h.stateMgr.SetMenuMessage(chatId, newMessageID)
+}
+
+func (h *Handler) ShowPauseTorrentsMenu(chatId int64) {
+	_, _, messageID, ok := h.getClientsAndMenuMessageOrReply(chatId)
+	if !ok {
+		return
+	}
+
+	text := ui.Msg(ui.MsgQuickActionsPauseMenuText)
+	keyboard := h.pauseTorrentsKeyboard()
+
+	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if err != nil {
+		logger.Error("Error sending message for user %d: %v", chatId, err)
+
+		return
+	}
+	h.stateMgr.SetMenuMessage(chatId, newMessageID)
+}
+
+func (h *Handler) ShowResumeTorrentsMenu(chatId int64) {
+	_, _, messageID, ok := h.getClientsAndMenuMessageOrReply(chatId)
+	if !ok {
+		return
+	}
+
+	text := ui.Msg(ui.MsgQuickActionsResumeMenuText)
+	keyboard := h.resumeTorrentsKeyboard()
+
+	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if err != nil {
+		logger.Error("Error sending message for user %d: %v", chatId, err)
+
+		return
+	}
+	h.stateMgr.SetMenuMessage(chatId, newMessageID)
+}
+
+func (h *Handler) pauseTorrentsKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.PauseAllTorrents),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.PauseRutrackerTorrents),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.PauseNonRutrackerTorrents),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.ButtonWithData(ui.Back, "quick_actions"),
+		),
+	)
+}
+
+func (h *Handler) resumeTorrentsKeyboard() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.ResumeAllTorrents),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.ResumeRutrackerTorrents),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.ResumeNonRutrackerTorrents),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.ButtonWithData(ui.Back, "quick_actions"),
+		),
+	)
 }
 
 func (h *Handler) getClientsAndMenuMessageOrReply(chatId int64) (context.Context, []*storage.Client, int, bool) {

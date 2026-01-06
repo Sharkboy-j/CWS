@@ -57,6 +57,7 @@ func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (
 		logger.Infof("notification telegram bot authorized as '%s'", nb.Self.UserName)
 		notifyBot = nb
 		notifySender = messaging.NewMessageSender(nb)
+		cmdHdlr.SetNotifyBotUsername(nb.Self.UserName)
 	}
 
 	clientHdlr := NewClientHandler(repo, msgSender, notifySender, stateMgr, cfg, bot.Self.UserName)

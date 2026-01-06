@@ -59,3 +59,9 @@ docker-build-push: lint
 	@echo "Building and pushing multi-arch image $(API_IMAGE):latest$(if $(VERSION), and $(API_IMAGE):$(VERSION),) for $(PLATFORMS)"
 	docker buildx create --use --name $(BUILDER) 2>/dev/null || true
 	docker buildx build --platform $(PLATFORMS) $(API_TAGS) --push .
+
+
+.PHONY: pull
+pull:
+	docker compose pull
+	docker compose up -d

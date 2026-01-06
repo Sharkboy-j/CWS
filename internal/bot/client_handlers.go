@@ -956,6 +956,18 @@ func (ch *ClientHandler) ShowQuickActionsMenu(chatId int64) {
 	}
 }
 
+func (ch *ClientHandler) ShowPauseTorrentsMenu(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.ShowPauseTorrentsMenu(chatId)
+	}
+}
+
+func (ch *ClientHandler) ShowResumeTorrentsMenu(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.ShowResumeTorrentsMenu(chatId)
+	}
+}
+
 func (ch *ClientHandler) HandlePauseAllTorrents(chatId int64) {
 	if ch.quickActionsHandler != nil {
 		ch.quickActionsHandler.HandlePauseAllTorrents(chatId)
@@ -965,6 +977,30 @@ func (ch *ClientHandler) HandlePauseAllTorrents(chatId int64) {
 func (ch *ClientHandler) HandleResumeAllTorrents(chatId int64) {
 	if ch.quickActionsHandler != nil {
 		ch.quickActionsHandler.HandleResumeAllTorrents(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandlePauseRutrackerTorrents(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandlePauseRutrackerTorrents(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandleResumeRutrackerTorrents(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandleResumeRutrackerTorrents(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandlePauseNonRutrackerTorrents(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandlePauseNonRutrackerTorrents(chatId)
+	}
+}
+
+func (ch *ClientHandler) HandleResumeNonRutrackerTorrents(chatId int64) {
+	if ch.quickActionsHandler != nil {
+		ch.quickActionsHandler.HandleResumeNonRutrackerTorrents(chatId)
 	}
 }
 

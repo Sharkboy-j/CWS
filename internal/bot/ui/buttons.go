@@ -30,27 +30,34 @@ const (
 	Cancel   ButtonID = "cancel"
 	Back     ButtonID = "back"
 
-	AddClient           ButtonID = "add_client"
-	RepeatCheck         ButtonID = "repeat_check"
-	NewSearch           ButtonID = "new_search"
-	PrevPage            ButtonID = "prev_page"
-	NextPage            ButtonID = "next_page"
-	Yes                 ButtonID = "yes"
-	No                  ButtonID = "no"
-	CheckTorrents       ButtonID = "check_torrents"
-	QuickActionsMenu    ButtonID = "quick_actions_menu"
-	ClientsMenu         ButtonID = "clients_menu"
-	AddTorrentFile      ButtonID = "add_torrent_file"
-	SearchTorrent       ButtonID = "search_torrent"
-	MonitorTorrent      ButtonID = "monitor_torrent"
-	BackToTorrents      ButtonID = "back_to_torrents"
-	PauseAllTorrents    ButtonID = "pause_all_torrents"
-	ResumeAllTorrents   ButtonID = "resume_all_torrents"
-	SpeedLimitMenu      ButtonID = "speed_limit_menu"
-	SettingsMenu        ButtonID = "settings_menu"
-	Variables           ButtonID = "variables"
-	RecommendedTorrents ButtonID = "recommended_torrents"
-	Timezone            ButtonID = "timezone"
+	AddClient                  ButtonID = "add_client"
+	RepeatCheck                ButtonID = "repeat_check"
+	NewSearch                  ButtonID = "new_search"
+	PrevPage                   ButtonID = "prev_page"
+	NextPage                   ButtonID = "next_page"
+	Yes                        ButtonID = "yes"
+	No                         ButtonID = "no"
+	CheckTorrents              ButtonID = "check_torrents"
+	QuickActionsMenu           ButtonID = "quick_actions_menu"
+	ClientsMenu                ButtonID = "clients_menu"
+	AddTorrentFile             ButtonID = "add_torrent_file"
+	SearchTorrent              ButtonID = "search_torrent"
+	MonitorTorrent             ButtonID = "monitor_torrent"
+	BackToTorrents             ButtonID = "back_to_torrents"
+	SubscribeNotifyBot         ButtonID = "subscribe_notify_bot"
+	PauseTorrentsMenu          ButtonID = "pause_torrents_menu"
+	ResumeTorrentsMenu         ButtonID = "resume_torrents_menu"
+	PauseAllTorrents           ButtonID = "pause_all_torrents"
+	ResumeAllTorrents          ButtonID = "resume_all_torrents"
+	PauseRutrackerTorrents     ButtonID = "pause_rutracker_torrents"
+	ResumeRutrackerTorrents    ButtonID = "resume_rutracker_torrents"
+	PauseNonRutrackerTorrents  ButtonID = "pause_non_rutracker_torrents"
+	ResumeNonRutrackerTorrents ButtonID = "resume_non_rutracker_torrents"
+	SpeedLimitMenu             ButtonID = "speed_limit_menu"
+	SettingsMenu               ButtonID = "settings_menu"
+	Variables                  ButtonID = "variables"
+	RecommendedTorrents        ButtonID = "recommended_torrents"
+	Timezone                   ButtonID = "timezone"
 
 	Speed10       ButtonID = "speed_10"
 	Speed100      ButtonID = "speed_100"
@@ -197,6 +204,7 @@ const (
 	MsgMainMenuDownloadFmt                MsgID = "main_menu_download_fmt"
 	MsgMainMenuUploadFmt                  MsgID = "main_menu_upload_fmt"
 	MsgMainMenuSpeedLimitBracketFmt       MsgID = "main_menu_speed_limit_bracket_fmt"
+	MsgMainMenuNoClientsText              MsgID = "main_menu_no_clients_text"
 
 	MsgSpeedZero         MsgID = "speed_zero"
 	MsgSpeedBpsFmt       MsgID = "speed_bps_fmt"
@@ -227,6 +235,8 @@ const (
 
 	MsgQuickActionsMenuText          MsgID = "quick_actions_menu_text"
 	MsgQuickActionsMenuNoClientsText MsgID = "quick_actions_menu_no_clients_text"
+	MsgQuickActionsPauseMenuText     MsgID = "quick_actions_pause_menu_text"
+	MsgQuickActionsResumeMenuText    MsgID = "quick_actions_resume_menu_text"
 
 	MsgSpeedLimitMenuText          MsgID = "speed_limit_menu_text"
 	MsgSpeedLimitMenuNoClientsText MsgID = "speed_limit_menu_no_clients_text"
@@ -234,13 +244,21 @@ const (
 	MsgSpeedLimitAppliedHeaderFmt  MsgID = "speed_limit_applied_header_fmt"
 	MsgSpeedLimitsRemovedHeader    MsgID = "speed_limits_removed_header"
 
-	MsgPauseAllHeaderText        MsgID = "pause_all_header_text"
-	MsgResumeAllHeaderText       MsgID = "resume_all_header_text"
-	MsgPauseAllClientSuccessFmt  MsgID = "pause_all_client_success_fmt"
-	MsgResumeAllClientSuccessFmt MsgID = "resume_all_client_success_fmt"
-	MsgResultErrorsHeaderFmt     MsgID = "result_errors_header_fmt"
-	MsgResultErrorsItemFmt       MsgID = "result_errors_item_fmt"
-	MsgResultTotalsFmt           MsgID = "result_totals_fmt"
+	MsgPauseAllHeaderText                 MsgID = "pause_all_header_text"
+	MsgResumeAllHeaderText                MsgID = "resume_all_header_text"
+	MsgPauseAllClientSuccessFmt           MsgID = "pause_all_client_success_fmt"
+	MsgResumeAllClientSuccessFmt          MsgID = "resume_all_client_success_fmt"
+	MsgPauseRutrackerHeaderText           MsgID = "pause_rutracker_header_text"
+	MsgResumeRutrackerHeaderText          MsgID = "resume_rutracker_header_text"
+	MsgPauseRutrackerClientSuccessFmt     MsgID = "pause_rutracker_client_success_fmt"
+	MsgResumeRutrackerClientSuccessFmt    MsgID = "resume_rutracker_client_success_fmt"
+	MsgPauseNonRutrackerHeaderText        MsgID = "pause_non_rutracker_header_text"
+	MsgResumeNonRutrackerHeaderText       MsgID = "resume_non_rutracker_header_text"
+	MsgPauseNonRutrackerClientSuccessFmt  MsgID = "pause_non_rutracker_client_success_fmt"
+	MsgResumeNonRutrackerClientSuccessFmt MsgID = "resume_non_rutracker_client_success_fmt"
+	MsgResultErrorsHeaderFmt              MsgID = "result_errors_header_fmt"
+	MsgResultErrorsItemFmt                MsgID = "result_errors_item_fmt"
+	MsgResultTotalsFmt                    MsgID = "result_totals_fmt"
 
 	MsgBotCommandMenuDescription    MsgID = "bot_command_menu_description"
 	MsgBotCommandCheckDescription   MsgID = "bot_command_check_description"
@@ -375,7 +393,7 @@ var buttonResources = map[ButtonID]buttonResource{
 	CheckTorrents: {
 		data: "check_torrents",
 		text: map[Locale]string{
-			LocaleRU: "🔍 Првоерить обновления",
+			LocaleRU: "🔍 Проверка обновлений",
 			LocaleEN: "🔍 Check updates",
 		},
 	},
@@ -421,6 +439,26 @@ var buttonResources = map[ButtonID]buttonResource{
 			LocaleEN: "🔙 Back to torrents",
 		},
 	},
+	SubscribeNotifyBot: {
+		text: map[Locale]string{
+			LocaleRU: "🔔 Подключить уведомления",
+			LocaleEN: "🔔 Enable notifications",
+		},
+	},
+	PauseTorrentsMenu: {
+		data: "quick_action_pause_menu",
+		text: map[Locale]string{
+			LocaleRU: "⏸ Остановить торренты -> ...",
+			LocaleEN: "⏸ Pause torrents -> ...",
+		},
+	},
+	ResumeTorrentsMenu: {
+		data: "quick_action_resume_menu",
+		text: map[Locale]string{
+			LocaleRU: "▶ Возобновить торренты -> ...",
+			LocaleEN: "▶ Resume torrents -> ...",
+		},
+	},
 	PauseAllTorrents: {
 		data: "quick_action_pause_all",
 		text: map[Locale]string{
@@ -433,6 +471,34 @@ var buttonResources = map[ButtonID]buttonResource{
 		text: map[Locale]string{
 			LocaleRU: "▶ Запустить все раздачи",
 			LocaleEN: "▶ Resume all torrents",
+		},
+	},
+	PauseRutrackerTorrents: {
+		data: "quick_action_pause_rutracker",
+		text: map[Locale]string{
+			LocaleRU: "⏸ Остановить rutracker раздачи",
+			LocaleEN: "⏸ Pause rutracker torrents",
+		},
+	},
+	ResumeRutrackerTorrents: {
+		data: "quick_action_resume_rutracker",
+		text: map[Locale]string{
+			LocaleRU: "▶ Запустить rutracker раздачи",
+			LocaleEN: "▶ Resume rutracker torrents",
+		},
+	},
+	PauseNonRutrackerTorrents: {
+		data: "quick_action_pause_non_rutracker",
+		text: map[Locale]string{
+			LocaleRU: "⏸ Остановить НЕ rutracker раздачи",
+			LocaleEN: "⏸ Pause non-rutracker torrents",
+		},
+	},
+	ResumeNonRutrackerTorrents: {
+		data: "quick_action_resume_non_rutracker",
+		text: map[Locale]string{
+			LocaleRU: "▶ Запустить НЕ rutracker раздачи",
+			LocaleEN: "▶ Resume non-rutracker torrents",
 		},
 	},
 	SpeedLimitMenu: {
@@ -944,6 +1010,10 @@ var msgResources = map[MsgID]map[Locale]string{
 		LocaleRU: " \\[%s]",
 		LocaleEN: " \\[%s]",
 	},
+	MsgMainMenuNoClientsText: {
+		LocaleRU: "🏠 *Главное меню*\n\nКлиенты не найдены.\nДобавьте клиента: *Настройки* → *Клиенты*.",
+		LocaleEN: "🏠 *Main menu*\n\nNo clients found.\nAdd a client: *Settings* → *Clients*.",
+	},
 	MsgSpeedZero: {
 		LocaleRU: "0 B/s",
 		LocaleEN: "0 B/s",
@@ -1040,6 +1110,14 @@ var msgResources = map[MsgID]map[Locale]string{
 		LocaleRU: "⚡ *Быстрые действия*\n\nКлиенты не найдены. Добавьте клиента для использования быстрых действий.",
 		LocaleEN: "⚡ *Quick actions*\n\nNo clients found. Add a client to use quick actions.",
 	},
+	MsgQuickActionsPauseMenuText: {
+		LocaleRU: "⏸ *Остановка раздач*\n\nВыберите какие раздачи остановить:",
+		LocaleEN: "⏸ *Pause torrents*\n\nChoose which torrents to pause:",
+	},
+	MsgQuickActionsResumeMenuText: {
+		LocaleRU: "▶ *Возобновление раздач*\n\nВыберите какие раздачи запустить:",
+		LocaleEN: "▶ *Resume torrents*\n\nChoose which torrents to resume:",
+	},
 	MsgSpeedLimitMenuText: {
 		LocaleRU: "🚦 *Ограничение скорости*\n\nВыберите скорость:",
 		LocaleEN: "🚦 *Speed limit*\n\nChoose a speed:",
@@ -1075,6 +1153,38 @@ var msgResources = map[MsgID]map[Locale]string{
 	MsgResumeAllClientSuccessFmt: {
 		LocaleRU: "✅ *%s* - запущено\n",
 		LocaleEN: "✅ *%s* - resumed\n",
+	},
+	MsgPauseRutrackerHeaderText: {
+		LocaleRU: "⏸ *Остановка rutracker раздач*\n\n",
+		LocaleEN: "⏸ *Pause rutracker torrents*\n\n",
+	},
+	MsgResumeRutrackerHeaderText: {
+		LocaleRU: "▶ *Запуск rutracker раздач*\n\n",
+		LocaleEN: "▶ *Resume rutracker torrents*\n\n",
+	},
+	MsgPauseRutrackerClientSuccessFmt: {
+		LocaleRU: "✅ *%s* - остановлено (%d)\n",
+		LocaleEN: "✅ *%s* - paused (%d)\n",
+	},
+	MsgResumeRutrackerClientSuccessFmt: {
+		LocaleRU: "✅ *%s* - запущено (%d)\n",
+		LocaleEN: "✅ *%s* - resumed (%d)\n",
+	},
+	MsgPauseNonRutrackerHeaderText: {
+		LocaleRU: "⏸ *Остановка НЕ rutracker раздач*\n\n",
+		LocaleEN: "⏸ *Pause non-rutracker torrents*\n\n",
+	},
+	MsgResumeNonRutrackerHeaderText: {
+		LocaleRU: "▶ *Запуск НЕ rutracker раздач*\n\n",
+		LocaleEN: "▶ *Resume non-rutracker torrents*\n\n",
+	},
+	MsgPauseNonRutrackerClientSuccessFmt: {
+		LocaleRU: "✅ *%s* - остановлено (%d)\n",
+		LocaleEN: "✅ *%s* - paused (%d)\n",
+	},
+	MsgResumeNonRutrackerClientSuccessFmt: {
+		LocaleRU: "✅ *%s* - запущено (%d)\n",
+		LocaleEN: "✅ *%s* - resumed (%d)\n",
 	},
 	MsgResultErrorsHeaderFmt: {
 		LocaleRU: "\n❌ Ошибки (%d):\n",

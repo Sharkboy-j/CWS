@@ -579,6 +579,56 @@ func (r *Repository) SetNotificationsEnabled(ctx context.Context, userID int64, 
 	return nil
 }
 
+func (r *Repository) GetNotifyBotSubscribed(ctx context.Context, userID int64) (bool, error) {
+	query := `SELECT notify_bot_subscribed FROM user_states WHERE user_id = $1`
+
+	var subscribed sql.NullBool
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&subscribed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get notify_bot_subscribed: %w", err)
+	}
+	if !subscribed.Valid {
+		return false, nil
+	}
+
+	return subscribed.Bool, nil
+}
+
+func (r *Repository) SetNotifyBotSubscribed(ctx context.Context, userID int64, subscribed bool) error {
+	query := `UPDATE user_states
+	          SET notify_bot_subscribed = $1, updated_at = NOW()
+	          WHERE user_id = $2`
+
+	res, err := r.db.ExecContext(ctx, query, subscribed, userID)
+	if err != nil {
+		return fmt.Errorf("failed to set notify_bot_subscribed: %w", err)
+	}
+
+	rowsAffected, raErr := res.RowsAffected()
+	if raErr != nil {
+		return fmt.Errorf("failed to get rows affected: %w", raErr)
+	}
+
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	query = `INSERT INTO user_states (user_id, state, notify_bot_subscribed, updated_at)
+	         VALUES ($1, '', $2, NOW())
+	         ON CONFLICT (user_id)
+	         DO UPDATE SET notify_bot_subscribed = $2, updated_at = NOW()`
+
+	_, err = r.db.ExecContext(ctx, query, userID, subscribed)
+	if err != nil {
+		return fmt.Errorf("failed to insert/update notify_bot_subscribed: %w", err)
+	}
+
+	return nil
+}
+
 func (r *Repository) SetUserTimezone(ctx context.Context, userID int64, timezone string) error {
 	logger.Debug("Сохранение часового пояса для пользователя %d: %s", userID, timezone)
 	query := `UPDATE user_states 
@@ -611,7 +661,6 @@ func (r *Repository) SetUserTimezone(ctx context.Context, userID int64, timezone
 			return fmt.Errorf("failed to insert/update timezone: %w", err)
 		}
 	}
-	// read back synchronously to verify write
 	var val sql.NullInt64
 	if err = r.db.QueryRowContext(ctx, `SELECT recommended_torrents_count FROM user_states WHERE user_id = $1`, userID).Scan(&val); err != nil {
 		logger.Debugf("verifyRecommendedTorrents: cannot read back value for user %d: %v", userID, err)

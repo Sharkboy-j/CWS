@@ -35,6 +35,8 @@ type Service interface {
 	GetTorrentPropertiesCtx(ctx context.Context, hash string) (qbittorrent.TorrentProperties, error)
 	PauseAllTorrents(ctx context.Context) error
 	ResumeAllTorrents(ctx context.Context) error
+	PauseTorrents(ctx context.Context, hashes []string) error
+	ResumeTorrents(ctx context.Context, hashes []string) error
 	PauseTorrent(ctx context.Context, hash string) error
 	ResumeTorrent(ctx context.Context, hash string) error
 	SetGlobalSpeedLimits(ctx context.Context, downloadLimit, uploadLimit int64) error

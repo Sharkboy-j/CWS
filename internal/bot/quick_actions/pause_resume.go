@@ -37,9 +37,8 @@ func (h *Handler) HandlePauseAllTorrents(chatId int64) {
 		}
 	}
 
-	if !h.sendOrEditResultWithMainMenu(chatId, messageID, text, successCount, failCount, failedClients) {
-		return
-	}
+	keyboard := h.pauseTorrentsKeyboard()
+	_ = h.sendOrEditResult(chatId, messageID, text, successCount, failCount, failedClients, &keyboard)
 }
 
 func (h *Handler) HandleResumeAllTorrents(chatId int64) {
@@ -73,7 +72,6 @@ func (h *Handler) HandleResumeAllTorrents(chatId int64) {
 		}
 	}
 
-	if !h.sendOrEditResultWithMainMenu(chatId, messageID, text, successCount, failCount, failedClients) {
-		return
-	}
+	keyboard := h.resumeTorrentsKeyboard()
+	_ = h.sendOrEditResult(chatId, messageID, text, successCount, failCount, failedClients, &keyboard)
 }

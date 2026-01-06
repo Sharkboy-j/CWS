@@ -4,33 +4,52 @@ import (
 	"context"
 	"cws/logger"
 	"fmt"
+	"sort"
 
 	"github.com/autobrr/go-qbittorrent"
 )
 
 func (s *service) GetTorrentSavePaths(ctx context.Context) ([]string, error) {
-	logger.Debug("Получение путей сохранения из существующих торрентов")
+	logger.Debug("Fetching save paths from existing torrents")
 
 	torrents, err := s.client.GetTorrentsCtx(ctx, qbittorrent.TorrentFilterOptions{Filter: qbittorrent.TorrentFilterAll})
 	if err != nil {
-		logger.Error("Ошибка при получении торрентов: %v", err)
+		logger.Error("Failed to fetch torrents: %v", err)
 
 		return nil, fmt.Errorf("failed to get torrents: %w", err)
 	}
 
-	pathMap := make(map[string]bool)
+	pathCounts := make(map[string]int)
 	for _, torrent := range torrents {
 		if torrent.SavePath != "" {
-			pathMap[torrent.SavePath] = true
+			pathCounts[torrent.SavePath]++
 		}
 	}
 
-	var paths []string
-	for path := range pathMap {
-		paths = append(paths, path)
+	type savePathStat struct {
+		path  string
+		count int
 	}
 
-	logger.Debug("Найдено %d уникальных путей сохранения", len(paths))
+	stats := make([]savePathStat, 0, len(pathCounts))
+	for path, count := range pathCounts {
+		stats = append(stats, savePathStat{path: path, count: count})
+	}
+
+	sort.Slice(stats, func(i, j int) bool {
+		if stats[i].count != stats[j].count {
+			return stats[i].count > stats[j].count
+		}
+
+		return stats[i].path < stats[j].path
+	})
+
+	paths := make([]string, 0, len(stats))
+	for _, st := range stats {
+		paths = append(paths, st.path)
+	}
+
+	logger.Debug("Found %d unique save paths", len(paths))
 
 	return paths, nil
 }
