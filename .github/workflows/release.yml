@@ -122,6 +122,7 @@ jobs:
           ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-amd64 \
           ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-arm64
 
+
   create-release:
     runs-on: [self-hosted, arm64]
     needs: docker-manifest
@@ -157,3 +158,13 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify-portainer:
+    runs-on: [ self-hosted, arm64 ]
+    needs: docker-manifest
+    steps:
+      - name: Redeploy
+        run: |
+          curl -k -X POST \
+            -H "Content-Type: application/json" \
+            ${{ secrets.PORTAINER_WEBHOOK_URL }}
