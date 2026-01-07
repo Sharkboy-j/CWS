@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"cws/internal/bot/ui"
+	"cws/internal/dialogstate"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
 	"strconv"
@@ -27,13 +28,13 @@ func NewDocumentHandler(stateMgr *StateManager, msgSender messaging.MessageSende
 
 func (dh *DocumentHandler) HandleDocument(ctx context.Context, chatId int64, document *tgbotapi.Document, fileData []byte) {
 	state, exists := dh.stateMgr.GetUserState(chatId)
-	if !exists || !strings.HasPrefix(state, "add_torrent_wait_file_") {
+	if !exists || !strings.HasPrefix(state, string(dialogstate.StateAddTorrentWait)+"_") {
 		logger.Debug("Пользователь %d отправил файл, но не в процессе добавления торрента", chatId)
 
 		return
 	}
 
-	prefix := "add_torrent_wait_file_"
+	prefix := string(dialogstate.StateAddTorrentWait) + "_"
 	clientIDStr := strings.TrimPrefix(state, prefix)
 	if clientIDStr == state {
 		logger.Warn("Неверный формат состояния для добавления торрента: %s", state)

@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"cws/internal/bot/ui"
+	"cws/internal/dialogstate"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
 	"strconv"
@@ -70,8 +71,8 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 	case data == "back_to_torrents":
 		ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
 
-		if state, ok := ch.stateMgr.GetUserState(chatId); ok && strings.HasPrefix(state, "monitor_torrent_hash_") {
-			clientIDStr := strings.TrimPrefix(state, "monitor_torrent_hash_")
+		if state, ok := ch.stateMgr.GetUserState(chatId); ok && strings.HasPrefix(state, string(dialogstate.StateMonitorTorrent)+"_") {
+			clientIDStr := strings.TrimPrefix(state, string(dialogstate.StateMonitorTorrent)+"_")
 			if clientID, err := strconv.ParseInt(clientIDStr, 10, 64); err == nil {
 				ch.clientHdlr.StartTorrentMonitorDialog(chatId, clientID)
 
@@ -153,8 +154,8 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 			}
 			ch.cmdHdlr.ShowTimezoneMenu(chatId, page)
 		}
-	case data == "edit_recommended_torrents_input":
-		ch.stateMgr.SetUserState(chatId, "edit_recommended_torrents_input")
+	case data == string(dialogstate.StateEditRecommended):
+		ch.stateMgr.SetUserState(chatId, string(dialogstate.StateEditRecommended))
 		text := ui.Msg(ui.MsgVariablesRecommendedTorrentsPrompt)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
@@ -228,9 +229,9 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 			ch.cmdHdlr.HandleClientsCommand(chatId)
 		}
 	case data == "set_ssl_true":
-		ch.dialogHdlr.FinishAddClient(chatId, true)
+		ch.dialogHdlr.FinishEditClient(chatId, true)
 	case data == "set_ssl_false":
-		ch.dialogHdlr.FinishAddClient(chatId, false)
+		ch.dialogHdlr.FinishEditClient(chatId, false)
 	case data == "clients":
 		if ch.cmdHdlr != nil {
 			ch.cmdHdlr.HandleClientsCommand(chatId)

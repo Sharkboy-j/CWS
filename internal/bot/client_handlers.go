@@ -6,6 +6,7 @@ import (
 	"cws/internal/bot/monitoring"
 	"cws/internal/bot/quick_actions"
 	"cws/internal/bot/ui"
+	"cws/internal/dialogstate"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -119,10 +120,10 @@ func (s *stateSetterAdapter) SetUserState(chatId int64, state string) {
 	s.stateMgr.SetUserState(chatId, state)
 }
 
-func (ch *ClientHandler) ShowClientDetails(chatId int64, clientID int64) {
+func (ch *ClientHandler) ShowClientDetails(chatId int64, clientID int64) bool {
 	client, ok := ch.getClientByIDWithErrorHandling(chatId, clientID)
 	if !ok {
-		return
+		return false
 	}
 
 	sslText := ui.Msg(ui.MsgClientDetailsSSLNO)
@@ -148,9 +149,11 @@ func (ch *ClientHandler) ShowClientDetails(chatId int64, clientID int64) {
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
 
-		return
+		return false
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+
+	return true
 }
 
 func (ch *ClientHandler) ShowDeleteConfirmation(chatId int64, clientID int64) {
@@ -418,7 +421,7 @@ func (ch *ClientHandler) StartTorrentMonitorDialog(chatId int64, clientID int64)
 					Torrents: monitorItems,
 				}
 
-				ch.stateMgr.SetUserState(chatId, fmt.Sprintf("monitor_torrent_hash_%d", clientID))
+				ch.stateMgr.SetUserState(chatId, fmt.Sprintf("%s_%d", dialogstate.StateMonitorTorrent, clientID))
 				ch.ShowTorrentMonitorPage(chatId, clientID, 0)
 
 				return
@@ -506,7 +509,7 @@ func (ch *ClientHandler) ShowTorrentMonitorPage(chatId int64, clientID int64, pa
 }
 
 func (ch *ClientHandler) StartTorrentMonitorManualInput(chatId int64, clientID int64) {
-	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("monitor_torrent_hash_%d", clientID))
+	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("%s_%d", dialogstate.StateMonitorTorrent, clientID))
 	text := ui.Msg(ui.MsgTorrentMonitorManualHashPrompt)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -564,7 +567,7 @@ func (ch *ClientHandler) StartAddTorrentDialog(chatId int64, clientID int64) {
 		return
 	}
 
-	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("add_torrent_wait_file_%d", clientID))
+	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("%s_%d", dialogstate.StateAddTorrentWait, clientID))
 	text := ui.Msgf(ui.MsgAddTorrentSendFilePromptFmt, client.Name)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -744,7 +747,7 @@ func (ch *ClientHandler) HandleSavePathSelection(chatId int64, clientID int64, p
 }
 
 func (ch *ClientHandler) StartCustomSavePathDialog(chatId int64, clientID int64) {
-	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("add_torrent_custom_path_%d", clientID))
+	ch.stateMgr.SetUserState(chatId, fmt.Sprintf("%s_%d", dialogstate.StateAddTorrentCustom, clientID))
 	text := ui.Msg(ui.MsgCustomSavePathPromptText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(

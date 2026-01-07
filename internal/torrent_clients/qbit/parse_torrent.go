@@ -6,9 +6,7 @@ import (
 	"cws/logger"
 	"encoding/hex"
 	"fmt"
-	"strings"
 
-	"github.com/autobrr/go-qbittorrent"
 	"github.com/jackpal/bencode-go"
 )
 
@@ -70,15 +68,4 @@ func ParseTorrentFile(torrentData []byte) (*TorrentInfo, error) {
 		InfoHash: infoHash,
 		Name:     name,
 	}, nil
-}
-
-func FindTorrentByName(torrents []qbittorrent.Torrent, name string) *qbittorrent.Torrent {
-	for _, torrent := range torrents {
-		if strings.EqualFold(torrent.Name, name) {
-
-			return &torrent
-		}
-	}
-
-	return nil
 }

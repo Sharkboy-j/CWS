@@ -3,6 +3,7 @@ package quick_actions
 import (
 	"context"
 	"cws/internal/bot/ui"
+	"cws/internal/dialogstate"
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
 
@@ -81,7 +82,7 @@ func (h *Handler) ShowSpeedLimitMenu(chatId int64) {
 func (h *Handler) StartCustomSpeedLimitDialog(chatId int64) {
 	logger.Debugf("Starting custom speed limit dialog for user %d", chatId)
 	if h.stateSetter != nil {
-		h.stateSetter.SetUserState(chatId, "custom_speed_limit")
+		h.stateSetter.SetUserState(chatId, string(dialogstate.StateCustomSpeedLimit))
 	}
 	text := ui.Msg(ui.MsgSpeedLimitCustomPromptText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(

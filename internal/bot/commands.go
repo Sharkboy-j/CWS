@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"cws/internal/bot/ui"
+	"cws/internal/dialogstate"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -337,7 +338,7 @@ func (ch *CommandHandler) ShowEditRecommendedTorrents(chatId int64) {
 			ui.Data("4", "set_recommended_torrents_4"), ui.Data("5", "set_recommended_torrents_5"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			ui.ButtonWithData(ui.SpeedCustom, "edit_recommended_torrents_input"),
+			ui.ButtonWithData(ui.SpeedCustom, string(dialogstate.StateEditRecommended)),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.Variables),
@@ -412,7 +413,7 @@ func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
-func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
+func (ch *CommandHandler) HandleClientsCommand(chatId int64) bool {
 	logger.Debugf("Пользователь %d запросил список клиентов", chatId)
 	ctx := context.Background()
 	clients, err := ch.repo.GetAllClients(ctx, chatId)
@@ -420,7 +421,7 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
 		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
 
-		return
+		return false
 	}
 	logger.Debugf("Пользователь %d имеет %d клиентов", chatId, len(clients))
 
@@ -429,11 +430,8 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	if len(clients) == 0 {
 		text := ui.Msg(ui.MsgClientsListNoClients)
 		err = sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text)
-		if err != nil {
-			return
-		}
 
-		return
+		return err == nil
 	}
 	var text strings.Builder
 	text.WriteString(ui.Msg(ui.MsgClientsListHeader))
@@ -468,7 +466,9 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) {
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
 
-		return
+		return false
 	}
 	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+
+	return true
 }

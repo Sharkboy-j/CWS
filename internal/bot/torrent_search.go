@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"cws/internal/bot/ui"
+	"cws/internal/dialogstate"
 	"cws/internal/storage"
 	"cws/internal/telegram/messaging"
 	"cws/internal/torrent_clients/qbit"
@@ -43,7 +44,7 @@ func NewTorrentSearchService(repo *storage.Repository, msgSender messaging.Messa
 }
 
 func (tss *TorrentSearchService) StartTorrentSearchDialog(chatId int64) {
-	tss.stateMgr.SetUserState(chatId, "search_torrent_query")
+	tss.stateMgr.SetUserState(chatId, string(dialogstate.StateSearchTorrent))
 	text := ui.Msg(ui.MsgSearchStartPromptText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
