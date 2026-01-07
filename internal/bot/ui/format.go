@@ -8,13 +8,13 @@ func FormatSpeed(bytesPerSec int64) string {
 		return Msg(MsgSpeedZero)
 	}
 	if bytesPerSec < 1024 {
-		return Msgf(MsgSpeedBpsFmt, bytesPerSec)
+		return Msgs(MsgSpeedBpsFmt, bytesPerSec)
 	}
 	if bytesPerSec < 1024*1024 {
-		return Msgf(MsgSpeedKBpsFmt, float64(bytesPerSec)/1024)
+		return Msgs(MsgSpeedKBpsFmt, float64(bytesPerSec)/1024)
 	}
 
-	return Msgf(MsgSpeedMBpsFmt, float64(bytesPerSec)/(1024*1024))
+	return Msgs(MsgSpeedMBpsFmt, float64(bytesPerSec)/(1024*1024))
 }
 
 // FormatSpeedLimit returns formatted speed limit (MB/s) or empty string if no limit.
@@ -25,7 +25,7 @@ func FormatSpeedLimit(bytesPerSec int64) string {
 
 	mbPerSec := float64(bytesPerSec) / (1024 * 1024)
 
-	return Msgf(MsgSpeedLimitMBpsFmt, mbPerSec)
+	return Msgs(MsgSpeedLimitMBpsFmt, mbPerSec)
 }
 
 // FormatBytes formats bytes using 1024 base and "KB/MB/..." suffixes.
@@ -46,7 +46,7 @@ func FormatBytes(bytes int64) string {
 // FormatSpeedBytes formats speed as human-readable bytes plus "/s".
 func FormatSpeedBytes(bytesPerSec int64) string {
 	if bytesPerSec < 1024 {
-		return Msgf(MsgSpeedBpsFmt, bytesPerSec)
+		return Msgs(MsgSpeedBpsFmt, bytesPerSec)
 	}
 
 	return FormatBytes(bytesPerSec) + Msg(MsgTorrentProgressSpeedSuffixPerSec)

@@ -1427,7 +1427,7 @@ func MsgForLocale(id MsgID, locale Locale) string {
 	return string(id)
 }
 
-func Msgf(id MsgID, args ...any) string {
+func Msgs(id MsgID, args ...any) string {
 	return fmt.Sprintf(Msg(id), args...)
 }
 

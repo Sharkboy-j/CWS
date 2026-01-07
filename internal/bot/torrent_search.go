@@ -44,21 +44,18 @@ func NewTorrentSearchService(repo *storage.Repository, msgSender messaging.Messa
 }
 
 func (tss *TorrentSearchService) StartTorrentSearchDialog(chatId int64) {
-	tss.stateMgr.SetUserState(chatId, string(dialogstate.StateSearchTorrent))
-	text := ui.Msg(ui.MsgSearchStartPromptText)
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			ui.ButtonWithData(ui.Cancel, "main_menu"),
-		),
+	err := sendSingleButtonPromptWithState(
+		tss.stateMgr,
+		tss.msgSender,
+		chatId,
+		string(dialogstate.StateSearchTorrent),
+		ui.Msg(ui.MsgSearchStartPromptText),
+		ui.ButtonWithData(ui.Cancel, "main_menu"),
+		"Ошибка при отправке/обновлении сообщения для пользователя",
 	)
-	messageID := tss.stateMgr.GetMenuMessage(chatId)
-	newMessageID, err := tss.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
-		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
-
 		return
 	}
-	tss.stateMgr.SetMenuMessage(chatId, newMessageID)
 }
 
 func (tss *TorrentSearchService) SearchTorrents(chatId int64, query string) {
@@ -195,7 +192,7 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 	messageID := tss.stateMgr.GetMenuMessage(chatId)
 
 	if len(results) == 0 {
-		text := ui.Msgf(ui.MsgSearchNoResultsFmt, query)
+		text := ui.Msgs(ui.MsgSearchNoResultsFmt, query)
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.NewSearch),
@@ -229,11 +226,11 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 
 	var text strings.Builder
 	if query != "" {
-		text.WriteString(ui.Msgf(ui.MsgSearchResultsHeaderWithQueryFmt, query))
+		text.WriteString(ui.Msgs(ui.MsgSearchResultsHeaderWithQueryFmt, query))
 	} else {
 		text.WriteString(ui.Msg(ui.MsgSearchResultsHeader))
 	}
-	text.WriteString(ui.Msgf(ui.MsgSearchResultsFoundCountFmt, len(results)))
+	text.WriteString(ui.Msgs(ui.MsgSearchResultsFoundCountFmt, len(results)))
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	for i, result := range pageResults {
@@ -243,12 +240,12 @@ func (tss *TorrentSearchService) showSearchResults(chatId int64, query string, r
 		}
 
 		globalIdx := startIdx + i
-		text.WriteString(ui.Msgf(ui.MsgSearchResultsItemLineFmt, globalIdx+1, displayName))
-		text.WriteString(ui.Msgf(ui.MsgSearchResultsItemHashFmt, result.Hash))
+		text.WriteString(ui.Msgs(ui.MsgSearchResultsItemLineFmt, globalIdx+1, displayName))
+		text.WriteString(ui.Msgs(ui.MsgSearchResultsItemHashFmt, result.Hash))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
-				ui.Msgf(ui.MsgSearchResultsButtonItemFmt, globalIdx+1, truncatePath(displayName, 999)),
+				ui.Msgs(ui.MsgSearchResultsButtonItemFmt, globalIdx+1, truncatePath(displayName, 999)),
 				fmt.Sprintf("search_torrent_select_%d", globalIdx),
 			),
 		))

@@ -398,7 +398,7 @@ func (dh *DialogHandler) StartEditClientDialog(chatId int64, clientID int64) {
 
 	const separator = "|||"
 	dh.stateMgr.SetUserState(chatId, fmt.Sprintf("%s%s%d%s%s", dialogstate.StateEditClientName, separator, clientID, separator, client.Name))
-	messageText := ui.Msgf(ui.MsgDialogEditClientStartFmt, client.Name)
+	messageText := ui.Msgs(ui.MsgDialogEditClientStartFmt, client.Name)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.Cancel, "cancel_edit_client"),

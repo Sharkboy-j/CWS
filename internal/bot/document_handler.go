@@ -56,7 +56,7 @@ func (dh *DocumentHandler) HandleDocument(ctx context.Context, chatId int64, doc
 
 	logger.Debugf("Пользователь %d отправил торрент файл %s для клиента %d", chatId, document.FileName, clientID)
 
-	text := ui.Msgf(ui.MsgDocumentProcessingTorrentFileFmt, document.FileName)
+	text := ui.Msgs(ui.MsgDocumentProcessingTorrentFileFmt, document.FileName)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.Cancel, "cancel_add_torrent"),

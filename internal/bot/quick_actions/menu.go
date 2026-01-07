@@ -47,98 +47,6 @@ func (h *Handler) SetStateSetter(stateSetter StateSetter) {
 	h.stateSetter = stateSetter
 }
 
-func (h *Handler) ShowQuickActionsMenu(chatId int64) {
-	logger.Debugf("Showing quick actions menu for user %d", chatId)
-	ctx := context.Background()
-	clients, err := h.repo.GetAllClients(ctx, chatId)
-	if err != nil {
-		logger.Error("Error getting clients for user %d: %v", chatId, err)
-		_, _ = h.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
-
-		return
-	}
-
-	messageID := h.stateMgr.GetMenuMessage(chatId)
-
-	if len(clients) == 0 {
-		text := ui.Msg(ui.MsgQuickActionsMenuNoClientsText)
-		keyboard := tgbotapi.NewInlineKeyboardMarkup(
-			tgbotapi.NewInlineKeyboardRow(
-				ui.Button(ui.MainMenu),
-			),
-		)
-		newMessageID, sendErr := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-		if sendErr != nil {
-			logger.Error("Error sending message for user %d: %v", chatId, sendErr)
-
-			return
-		}
-		h.stateMgr.SetMenuMessage(chatId, newMessageID)
-
-		return
-	}
-
-	text := ui.Msg(ui.MsgQuickActionsMenuText)
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.PauseTorrentsMenu),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.ResumeTorrentsMenu),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.SpeedLimitMenu),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			ui.Button(ui.MainMenu),
-		),
-	)
-
-	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-	if err != nil {
-		logger.Error("Error sending message for user %d: %v", chatId, err)
-
-		return
-	}
-	h.stateMgr.SetMenuMessage(chatId, newMessageID)
-}
-
-func (h *Handler) ShowPauseTorrentsMenu(chatId int64) {
-	_, _, messageID, ok := h.getClientsAndMenuMessageOrReply(chatId)
-	if !ok {
-		return
-	}
-
-	text := ui.Msg(ui.MsgQuickActionsPauseMenuText)
-	keyboard := h.pauseTorrentsKeyboard()
-
-	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-	if err != nil {
-		logger.Error("Error sending message for user %d: %v", chatId, err)
-
-		return
-	}
-	h.stateMgr.SetMenuMessage(chatId, newMessageID)
-}
-
-func (h *Handler) ShowResumeTorrentsMenu(chatId int64) {
-	_, _, messageID, ok := h.getClientsAndMenuMessageOrReply(chatId)
-	if !ok {
-		return
-	}
-
-	text := ui.Msg(ui.MsgQuickActionsResumeMenuText)
-	keyboard := h.resumeTorrentsKeyboard()
-
-	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
-	if err != nil {
-		logger.Error("Error sending message for user %d: %v", chatId, err)
-
-		return
-	}
-	h.stateMgr.SetMenuMessage(chatId, newMessageID)
-}
-
 func (h *Handler) pauseTorrentsKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -190,6 +98,38 @@ func (h *Handler) getClientsAndMenuMessageOrReply(chatId int64) (context.Context
 	}
 
 	messageID := h.stateMgr.GetMenuMessage(chatId)
+
+	return ctx, clients, messageID, true
+}
+
+func (h *Handler) getClientsAndMenuMessageOrReplyWithMainMenu(chatId int64, noClientsText string) (context.Context, []*storage.Client, int, bool) {
+	ctx := context.Background()
+	clients, err := h.repo.GetAllClients(ctx, chatId)
+	if err != nil {
+		logger.Error("Error getting clients for user %d: %v", chatId, err)
+		_, _ = h.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
+
+		return nil, nil, 0, false
+	}
+
+	messageID := h.stateMgr.GetMenuMessage(chatId)
+
+	if len(clients) == 0 {
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				ui.Button(ui.MainMenu),
+			),
+		)
+		newMessageID, sendErr := h.msgSender.SendOrEdit(chatId, messageID, noClientsText, &keyboard)
+		if sendErr != nil {
+			logger.Error("Error sending message for user %d: %v", chatId, sendErr)
+
+			return nil, nil, 0, false
+		}
+		h.stateMgr.SetMenuMessage(chatId, newMessageID)
+
+		return nil, nil, 0, false
+	}
 
 	return ctx, clients, messageID, true
 }

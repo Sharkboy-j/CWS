@@ -18,13 +18,13 @@ func (h *Handler) sendOrEditResult(
 	keyboard *tgbotapi.InlineKeyboardMarkup,
 ) bool {
 	if failCount > 0 {
-		text += ui.Msgf(ui.MsgResultErrorsHeaderFmt, failCount)
+		text += ui.Msgs(ui.MsgResultErrorsHeaderFmt, failCount)
 		for _, name := range failedClients {
-			text += ui.Msgf(ui.MsgResultErrorsItemFmt, name)
+			text += ui.Msgs(ui.MsgResultErrorsItemFmt, name)
 		}
 	}
 
-	text += ui.Msgf(ui.MsgResultTotalsFmt, successCount, failCount)
+	text += ui.Msgs(ui.MsgResultTotalsFmt, successCount, failCount)
 
 	newMessageID, err := h.msgSender.SendOrEdit(chatId, messageID, text, keyboard)
 	if err != nil {

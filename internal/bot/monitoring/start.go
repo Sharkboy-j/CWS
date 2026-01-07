@@ -31,7 +31,7 @@ func (tms *torrentMonitorService) StartTorrentMonitoring(ctx context.Context, ch
 
 	client, err := tms.repo.GetClientByID(ctx, clientID, chatId)
 	if err == nil && client != nil {
-		text := ui.Msgf(ui.MsgTorrentMonitorClientProcessingFmt, textutil.EscapeMarkdown(client.Name))
+		text := ui.Msgs(ui.MsgTorrentMonitorClientProcessingFmt, textutil.EscapeMarkdown(client.Name))
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -109,7 +109,7 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 
 	if torrent == nil {
 		logger.Debug("Торрент не найден для мониторинга, hash: %s, продолжаем попытки...", monitor.Hash)
-		text := ui.Msgf(ui.MsgTorrentMonitorClientTorrentProcessingFmt, textutil.EscapeMarkdown(client.Name))
+		text := ui.Msgs(ui.MsgTorrentMonitorClientTorrentProcessingFmt, textutil.EscapeMarkdown(client.Name))
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
 				ui.Button(ui.MainMenu),
@@ -218,20 +218,20 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 		status = ui.Msg(ui.MsgTorrentActivityMissingFiles)
 		progress = torrent.Progress * 100
 	default:
-		status = ui.Msgf(ui.MsgTorrentActivityOtherFmt, string(torrent.State))
+		status = ui.Msgs(ui.MsgTorrentActivityOtherFmt, string(torrent.State))
 		progress = torrent.Progress * 100
 	}
 
 	text := ui.Msg(ui.MsgTorrentProgressHeaderText)
-	text += ui.Msgf(ui.MsgTorrentProgressNameFmt, textutil.EscapeMarkdown(torrent.Name))
-	text += ui.Msgf(ui.MsgTorrentProgressPathFmt, textutil.EscapeMarkdown(torrent.SavePath))
-	text += ui.Msgf(ui.MsgTorrentProgressStatusFmt, status)
-	text += ui.Msgf(ui.MsgTorrentProgressPercentFmt, progress)
-	text += ui.Msgf(ui.MsgTorrentProgressDownloadFmt, ui.FormatSpeedBytes(torrent.DlSpeed))
-	text += ui.Msgf(ui.MsgTorrentProgressUploadFmt, ui.FormatSpeedBytes(torrent.UpSpeed))
-	text += ui.Msgf(ui.MsgTorrentProgressUploadedFmt, ui.FormatBytes(torrent.Uploaded))
-	text += ui.Msgf(ui.MsgTorrentProgressSeedsPeersFmt, torrent.NumSeeds, numPeers)
-	text += ui.Msgf(ui.MsgTorrentProgressSizeFmt, ui.FormatBytes(torrent.Completed), ui.FormatBytes(torrent.Size))
+	text += ui.Msgs(ui.MsgTorrentProgressNameFmt, textutil.EscapeMarkdown(torrent.Name))
+	text += ui.Msgs(ui.MsgTorrentProgressPathFmt, textutil.EscapeMarkdown(torrent.SavePath))
+	text += ui.Msgs(ui.MsgTorrentProgressStatusFmt, status)
+	text += ui.Msgs(ui.MsgTorrentProgressPercentFmt, progress)
+	text += ui.Msgs(ui.MsgTorrentProgressDownloadFmt, ui.FormatSpeedBytes(torrent.DlSpeed))
+	text += ui.Msgs(ui.MsgTorrentProgressUploadFmt, ui.FormatSpeedBytes(torrent.UpSpeed))
+	text += ui.Msgs(ui.MsgTorrentProgressUploadedFmt, ui.FormatBytes(torrent.Uploaded))
+	text += ui.Msgs(ui.MsgTorrentProgressSeedsPeersFmt, torrent.NumSeeds, numPeers)
+	text += ui.Msgs(ui.MsgTorrentProgressSizeFmt, ui.FormatBytes(torrent.Completed), ui.FormatBytes(torrent.Size))
 
 	return text
 }

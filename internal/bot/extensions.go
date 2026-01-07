@@ -119,7 +119,7 @@ func (ch *ClientHandler) getQbClientByIDOrReply(ctx context.Context, chatId int6
 	qbClient, err := qbit.New(ctx, client)
 	if err != nil {
 		logger.Error("Ошибка при подключении к qBit клиенту %s для пользователя %d: %v", client.Name, chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msgf(ui.MsgErrorConnectClientFmt, client.Name), nil)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msgs(ui.MsgErrorConnectClientFmt, client.Name), nil)
 
 		return nil, nil, false
 	}

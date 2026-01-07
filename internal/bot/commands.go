@@ -95,7 +95,7 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 			qbClient, qbErr := qbit.New(ctx, client)
 			if qbErr != nil {
 				logger.Error("Ошибка при подключении к клиенту %s: %v", client.Name, qbErr)
-				text.WriteString(ui.Msgf(ui.MsgMainMenuClientConnectErrorFmt, client.Name))
+				text.WriteString(ui.Msgs(ui.MsgMainMenuClientConnectErrorFmt, client.Name))
 
 				continue
 			}
@@ -103,22 +103,22 @@ func (ch *CommandHandler) ShowMainMenu(chatId int64) {
 			transferInfo, transferErr := qbClient.GetTransferInfo(ctx)
 			if transferErr != nil {
 				logger.Error("Ошибка при получении информации о передаче для клиента %s: %v", client.Name, transferErr)
-				text.WriteString(ui.Msgf(ui.MsgMainMenuClientTransferInfoErrorFmt, client.Name))
+				text.WriteString(ui.Msgs(ui.MsgMainMenuClientTransferInfoErrorFmt, client.Name))
 
 				continue
 			}
 
-			text.WriteString(ui.Msgf(ui.MsgMainMenuClientLinePrefixFmt, client.Name))
+			text.WriteString(ui.Msgs(ui.MsgMainMenuClientLinePrefixFmt, client.Name))
 
-			text.WriteString(ui.Msgf(ui.MsgMainMenuDownloadFmt, ui.FormatSpeed(transferInfo.DownloadSpeed)))
+			text.WriteString(ui.Msgs(ui.MsgMainMenuDownloadFmt, ui.FormatSpeed(transferInfo.DownloadSpeed)))
 			if limit := ui.FormatSpeedLimit(transferInfo.DownloadLimit); limit != "" {
-				text.WriteString(ui.Msgf(ui.MsgMainMenuSpeedLimitBracketFmt, limit))
+				text.WriteString(ui.Msgs(ui.MsgMainMenuSpeedLimitBracketFmt, limit))
 			}
 			text.WriteString(" ")
 
-			text.WriteString(ui.Msgf(ui.MsgMainMenuUploadFmt, ui.FormatSpeed(transferInfo.UploadSpeed)))
+			text.WriteString(ui.Msgs(ui.MsgMainMenuUploadFmt, ui.FormatSpeed(transferInfo.UploadSpeed)))
 			if limit := ui.FormatSpeedLimit(transferInfo.UploadLimit); limit != "" {
-				text.WriteString(ui.Msgf(ui.MsgMainMenuSpeedLimitBracketFmt, limit))
+				text.WriteString(ui.Msgs(ui.MsgMainMenuSpeedLimitBracketFmt, limit))
 			}
 		}
 	}
@@ -179,7 +179,7 @@ func (ch *CommandHandler) ShowSettingsMenu(chatId int64) {
 	}
 
 	text := ui.Msg(ui.MsgSettingsMenuText)
-	toggleLabel := ui.Msgf(ui.MsgNotificationsToggleButtonFmt, status)
+	toggleLabel := ui.Msgs(ui.MsgNotificationsToggleButtonFmt, status)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			ui.Button(ui.ClientsMenu),
@@ -288,12 +288,12 @@ func (ch *CommandHandler) ShowVariablesMenu(chatId int64) {
 	}
 
 	text := ui.Msg(ui.MsgVariablesMenuText)
-	varLabel := ui.Msgf(ui.MsgKeyValueIntFmt, ui.Text(ui.RecommendedTorrents), count)
+	varLabel := ui.Msgs(ui.MsgKeyValueIntFmt, ui.Text(ui.RecommendedTorrents), count)
 	tz, tzErr := ch.repo.GetUserTimezone(ctx, chatId)
 	if tzErr != nil || tz == "" {
 		tz = "Europe/Minsk"
 	}
-	tzLabel := ui.Msgf(ui.MsgKeyValueStringFmt, ui.Text(ui.Timezone), tz)
+	tzLabel := ui.Msgs(ui.MsgKeyValueStringFmt, ui.Text(ui.Timezone), tz)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -328,7 +328,7 @@ func (ch *CommandHandler) ShowEditRecommendedTorrents(chatId int64) {
 		count = 3
 	}
 
-	text := ui.Msgf(ui.MsgEditRecommendedTorrentsTextFmt, count)
+	text := ui.Msgs(ui.MsgEditRecommendedTorrentsTextFmt, count)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -349,64 +349,6 @@ func (ch *CommandHandler) ShowEditRecommendedTorrents(chatId int64) {
 	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
 	if err != nil {
 		logger.Error("Ошибка при отправке/обновлении редактора переменной для пользователя %d: %v", chatId, err)
-
-		return
-	}
-	ch.stateMgr.SetMenuMessage(chatId, newMessageID)
-}
-
-func (ch *CommandHandler) ShowCheckClientsList(chatId int64) {
-	logger.Debugf("Пользователь %d запросил список клиентов для проверки", chatId)
-	ctx := context.Background()
-	clients, err := ch.repo.GetAllClients(ctx, chatId)
-	if err != nil {
-		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
-		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgClientsListError), nil)
-
-		return
-	}
-	logger.Debugf("Пользователь %d имеет %d клиентов для проверки", chatId, len(clients))
-
-	messageID := ch.stateMgr.GetMenuMessage(chatId)
-
-	if len(clients) == 0 {
-		text := ui.Msg(ui.MsgCheckClientsListNoClients)
-		sendErr := sendNoClientsMessage(ch.msgSender, ch.stateMgr, chatId, text)
-		if sendErr != nil {
-			return
-		}
-
-		return
-	}
-	var text strings.Builder
-	text.WriteString(ui.Msg(ui.MsgCheckClientsListHeader))
-	text.WriteString(ui.Msg(ui.MsgCheckClientsListChooseClient))
-
-	var rows [][]tgbotapi.InlineKeyboardButton
-	for _, client := range clients {
-		sslText := ui.IconSSL
-		if !client.SSL {
-			sslText = ui.IconNoSSL
-		}
-		text.WriteString(ui.Msgf(ui.MsgClientListItemFmt, sslText, client.Name))
-		text.WriteString(ui.Msgf(ui.MsgClientHostPortFmt, client.Host, client.Port))
-
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			ui.Data(
-				ui.Msgf(ui.MsgCheckClientsListButtonCheckFmt, client.Name),
-				fmt.Sprintf("check_client_%d", client.ID),
-			),
-		))
-	}
-
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		ui.Button(ui.MainMenu),
-	))
-
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-	newMessageID, err := ch.msgSender.SendOrEdit(chatId, messageID, text.String(), &keyboard)
-	if err != nil {
-		logger.Error("Ошибка при отправке/обновлении сообщения для пользователя %d: %v", chatId, err)
 
 		return
 	}
@@ -442,12 +384,12 @@ func (ch *CommandHandler) HandleClientsCommand(chatId int64) bool {
 		if !client.SSL {
 			sslText = ui.IconNoSSL
 		}
-		text.WriteString(ui.Msgf(ui.MsgClientListItemFmt, sslText, client.Name))
-		text.WriteString(ui.Msgf(ui.MsgClientHostPortFmt, client.Host, client.Port))
+		text.WriteString(ui.Msgs(ui.MsgClientListItemFmt, sslText, client.Name))
+		text.WriteString(ui.Msgs(ui.MsgClientHostPortFmt, client.Host, client.Port))
 
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.Data(
-				ui.Msgf(ui.MsgClientsListButtonDetailsFmt, client.Name),
+				ui.Msgs(ui.MsgClientsListButtonDetailsFmt, client.Name),
 				fmt.Sprintf("client_%d", client.ID),
 			),
 		))

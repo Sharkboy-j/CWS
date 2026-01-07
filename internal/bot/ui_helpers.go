@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"cws/internal/bot/ui"
+	"cws/internal/telegram/messaging"
+	"cws/logger"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -58,4 +60,32 @@ func buildMissingTorrentRowButtons(info missingTorrentInfo) []tgbotapi.InlineKey
 	}
 
 	return row
+}
+
+func sendSingleButtonPromptWithState(
+	stateMgr *StateManager,
+	msgSender messaging.MessageSender,
+	chatId int64,
+	userState string,
+	text string,
+	button tgbotapi.InlineKeyboardButton,
+	logContext string,
+) error {
+	if userState != "" {
+		stateMgr.SetUserState(chatId, userState)
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(button),
+	)
+	messageID := stateMgr.GetMenuMessage(chatId)
+	newMessageID, err := msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if err != nil {
+		logger.Error("%s %d: %v", logContext, chatId, err)
+
+		return err
+	}
+	stateMgr.SetMenuMessage(chatId, newMessageID)
+
+	return nil
 }
