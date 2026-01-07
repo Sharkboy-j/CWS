@@ -6,7 +6,6 @@ import (
 	"cws/internal/dialogstate"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -296,7 +295,7 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.handleMonitorResume(chatId, data)
 	case strings.HasPrefix(data, "monitor_delete_confirm_"):
 		ch.handleMonitorDeleteConfirm(chatId, data)
-	case strings.HasPrefix(data, "monitor_delete_cancel_"):
+	case data == "monitor_delete_cancel" || strings.HasPrefix(data, "monitor_delete_cancel_"):
 		ch.handleMonitorDeleteCancel(chatId, data)
 	case strings.HasPrefix(data, "monitor_delete_"):
 		ch.handleMonitorDelete(chatId, data)
@@ -521,14 +520,19 @@ func (ch *CallbackHandler) handleMonitorDelete(chatId int64, data string) {
 
 	ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
 
+	ch.clientHdlr.monitorDeleteCache[chatId] = pendingMonitorDelete{
+		ClientID: clientID,
+		Hash:     hash,
+	}
+
 	text := ui.Msg(ui.MsgDeleteFilesQuestionText)
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			ui.ButtonWithData(ui.DeleteFilesYes, fmt.Sprintf("monitor_delete_confirm_%d_%s_true", clientID, hash)),
-			ui.ButtonWithData(ui.DeleteFilesNo, fmt.Sprintf("monitor_delete_confirm_%d_%s_false", clientID, hash)),
+			ui.ButtonWithData(ui.DeleteFilesYes, "monitor_delete_confirm_true"),
+			ui.ButtonWithData(ui.DeleteFilesNo, "monitor_delete_confirm_false"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			ui.ButtonWithData(ui.Cancel, fmt.Sprintf("monitor_delete_cancel_%d_%s", clientID, hash)),
+			ui.ButtonWithData(ui.Cancel, "monitor_delete_cancel"),
 		),
 	)
 
@@ -545,25 +549,41 @@ func (ch *CallbackHandler) handleMonitorDelete(chatId int64, data string) {
 }
 
 func (ch *CallbackHandler) handleMonitorDeleteCancel(chatId int64, data string) {
-	prefix := "monitor_delete_cancel_"
-	rest := strings.TrimPrefix(data, prefix)
-	parts := strings.SplitN(rest, "_", 2)
-	if len(parts) != 2 {
-		logger.Warn("Invalid monitor delete cancel callback format from user %d: %s", chatId, data)
+	clientID := int64(0)
+	hash := ""
 
-		return
+	if data == "monitor_delete_cancel" {
+		cached, exists := ch.clientHdlr.monitorDeleteCache[chatId]
+		if exists {
+			clientID = cached.ClientID
+			hash = strings.TrimSpace(cached.Hash)
+		}
+	} else {
+		prefix := "monitor_delete_cancel_"
+		rest := strings.TrimPrefix(data, prefix)
+		parts := strings.SplitN(rest, "_", 2)
+		if len(parts) != 2 {
+			logger.Warn("Invalid monitor delete cancel callback format from user %d: %s", chatId, data)
+
+			return
+		}
+
+		clientIDStr := parts[0]
+		hash = strings.TrimSpace(parts[1])
+		if hash == "" {
+			return
+		}
+
+		var err error
+		clientID, err = strconv.ParseInt(clientIDStr, 10, 64)
+		if err != nil {
+			logger.Warn("Invalid client ID in monitor delete cancel callback from user %d: %s", chatId, clientIDStr)
+
+			return
+		}
 	}
 
-	clientIDStr := parts[0]
-	hash := strings.TrimSpace(parts[1])
-	if hash == "" {
-		return
-	}
-
-	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
-	if err != nil {
-		logger.Warn("Invalid client ID in monitor delete cancel callback from user %d: %s", chatId, clientIDStr)
-
+	if clientID == 0 || hash == "" {
 		return
 	}
 
@@ -575,23 +595,43 @@ func (ch *CallbackHandler) handleMonitorDeleteConfirm(chatId int64, data string)
 	prefix := "monitor_delete_confirm_"
 	rest := strings.TrimPrefix(data, prefix)
 	parts := strings.SplitN(rest, "_", 3)
-	if len(parts) != 3 {
+	clientID := int64(0)
+	hash := ""
+	deleteFilesStr := ""
+
+	if len(parts) == 3 {
+		clientIDStr := parts[0]
+		hash = strings.TrimSpace(parts[1])
+		deleteFilesStr = strings.TrimSpace(parts[2])
+		if hash == "" || deleteFilesStr == "" {
+			return
+		}
+
+		var err error
+		clientID, err = strconv.ParseInt(clientIDStr, 10, 64)
+		if err != nil {
+			logger.Warn("Invalid client ID in monitor delete confirm callback from user %d: %s", chatId, clientIDStr)
+
+			return
+		}
+	} else if len(parts) == 1 {
+		deleteFilesStr = strings.TrimSpace(parts[0])
+		if deleteFilesStr == "" {
+			return
+		}
+
+		cached, exists := ch.clientHdlr.monitorDeleteCache[chatId]
+		if exists {
+			clientID = cached.ClientID
+			hash = strings.TrimSpace(cached.Hash)
+		}
+	} else {
 		logger.Warn("Invalid monitor delete confirm callback format from user %d: %s", chatId, data)
 
 		return
 	}
 
-	clientIDStr := parts[0]
-	hash := strings.TrimSpace(parts[1])
-	deleteFilesStr := strings.TrimSpace(parts[2])
-	if hash == "" || deleteFilesStr == "" {
-		return
-	}
-
-	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
-	if err != nil {
-		logger.Warn("Invalid client ID in monitor delete confirm callback from user %d: %s", chatId, clientIDStr)
-
+	if clientID == 0 || hash == "" {
 		return
 	}
 

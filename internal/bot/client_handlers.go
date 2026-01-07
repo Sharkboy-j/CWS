@@ -32,9 +32,15 @@ type ClientHandler struct {
 	torrentFilesCache     map[int64]*TorrentFileCache
 	torrentMonitorCache   map[int64]*TorrentMonitorCache
 	monitorStartHashCache map[int64]string
+	monitorDeleteCache    map[int64]pendingMonitorDelete
 	torrentMonitorSvc     monitoring.TorrentMonitorService
 	torrentSearchSvc      *TorrentSearchService
 	quickActionsHandler   *quick_actions.Handler
+}
+
+type pendingMonitorDelete struct {
+	ClientID int64
+	Hash     string
 }
 
 type TorrentMonitorCache struct {
@@ -81,6 +87,7 @@ func NewClientHandler(repo *storage.Repository, msgSender messaging.MessageSende
 		torrentFilesCache:     make(map[int64]*TorrentFileCache),
 		torrentMonitorCache:   make(map[int64]*TorrentMonitorCache),
 		monitorStartHashCache: make(map[int64]string),
+		monitorDeleteCache:    make(map[int64]pendingMonitorDelete),
 		torrentMonitorSvc:     monitoring.NewTorrentMonitorService(repo, msgSender, stateMgr.GetMenuMessage, stateMgr.SetMenuMessage),
 		torrentSearchSvc:      NewTorrentSearchService(repo, msgSender, stateMgr),
 		quickActionsHandler:   quickActionsHandler,

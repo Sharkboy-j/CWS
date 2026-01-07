@@ -1287,8 +1287,8 @@ var msgResources = map[MsgID]map[Locale]string{
 		LocaleEN: "📊 *Torrent progress*\n\n",
 	},
 	MsgTorrentProgressNameFmt: {
-		LocaleRU: " *%s*\n\n",
-		LocaleEN: " *%s*\n\n",
+		LocaleRU: " `%s`\n\n",
+		LocaleEN: " `%s`\n\n",
 	},
 	MsgTorrentProgressPathFmt: {
 		LocaleRU: "📁 `%s`\n\n",
