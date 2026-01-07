@@ -39,7 +39,42 @@ func StartNotifyBot(ctx context.Context, bot *tgbotapi.BotAPI, repo *storage.Rep
 			}
 
 			if update.CallbackQuery != nil {
-				handleNotifyCallback(ctx, bot, sender, repo, update.CallbackQuery)
+				handleNotifyCallback(ctx, bot, sender, repo, update.CallbackQuery, "")
+			}
+		}
+	}
+}
+
+func StartNotifyBotWithMainUsername(ctx context.Context, bot *tgbotapi.BotAPI, repo *storage.Repository, mainBotUsername string) {
+	if bot == nil || repo == nil {
+		return
+	}
+
+	mainBotUsername = strings.TrimSpace(mainBotUsername)
+
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+
+	updates := bot.GetUpdatesChan(u)
+	sender := messaging.NewMessageSender(bot)
+
+	logger.Info("Notification bot started and waiting for updates...")
+
+	for {
+		select {
+		case <-ctx.Done():
+			bot.StopReceivingUpdates()
+
+			return
+		case update := <-updates:
+			if update.Message != nil {
+				handleNotifyMessage(ctx, sender, repo, update.Message)
+
+				continue
+			}
+
+			if update.CallbackQuery != nil {
+				handleNotifyCallback(ctx, bot, sender, repo, update.CallbackQuery, mainBotUsername)
 			}
 		}
 	}
@@ -64,7 +99,7 @@ func handleNotifyMessage(ctx context.Context, sender messaging.MessageSender, re
 	_, _ = sender.SendOrEdit(chatId, 0, "✅ Notifications bot activated.", nil)
 }
 
-func handleNotifyCallback(ctx context.Context, bot *tgbotapi.BotAPI, sender messaging.MessageSender, repo *storage.Repository, query *tgbotapi.CallbackQuery) {
+func handleNotifyCallback(ctx context.Context, bot *tgbotapi.BotAPI, sender messaging.MessageSender, repo *storage.Repository, query *tgbotapi.CallbackQuery, mainBotUsername string) {
 	callback := tgbotapi.NewCallback(query.ID, "")
 	_, _ = bot.Request(callback)
 
@@ -109,7 +144,7 @@ func handleNotifyCallback(ctx context.Context, bot *tgbotapi.BotAPI, sender mess
 		return
 	}
 
-	text, keyboard := buildCheckUpdatesNotificationMessage(items, page, "")
+	text, keyboard := buildCheckUpdatesNotificationMessage(items, page, mainBotUsername)
 	if text == "" {
 		return
 	}

@@ -12,6 +12,7 @@ import (
 	"cws/internal/torrent_clients/qbit"
 	"cws/logger"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/autobrr/go-qbittorrent"
@@ -19,20 +20,21 @@ import (
 )
 
 type ClientHandler struct {
-	repo                 *storage.Repository
-	msgSender            messaging.MessageSender
-	notifySender         messaging.MessageSender
-	stateMgr             *StateManager
-	cmdHdlr              *CommandHandler
-	cfg                  *config.Config
-	mainBotUsername      string
-	missingTorrentsCache map[int64][]missingTorrentInfo
-	checkResultsCache    map[int64]*CheckResultsCache
-	torrentFilesCache    map[int64]*TorrentFileCache
-	torrentMonitorCache  map[int64]*TorrentMonitorCache
-	torrentMonitorSvc    monitoring.TorrentMonitorService
-	torrentSearchSvc     *TorrentSearchService
-	quickActionsHandler  *quick_actions.Handler
+	repo                  *storage.Repository
+	msgSender             messaging.MessageSender
+	notifySender          messaging.MessageSender
+	stateMgr              *StateManager
+	cmdHdlr               *CommandHandler
+	cfg                   *config.Config
+	mainBotUsername       string
+	missingTorrentsCache  map[int64][]missingTorrentInfo
+	checkResultsCache     map[int64]*CheckResultsCache
+	torrentFilesCache     map[int64]*TorrentFileCache
+	torrentMonitorCache   map[int64]*TorrentMonitorCache
+	monitorStartHashCache map[int64]string
+	torrentMonitorSvc     monitoring.TorrentMonitorService
+	torrentSearchSvc      *TorrentSearchService
+	quickActionsHandler   *quick_actions.Handler
 }
 
 type TorrentMonitorCache struct {
@@ -68,19 +70,20 @@ func NewClientHandler(repo *storage.Repository, msgSender messaging.MessageSende
 	quickActionsHandler := quick_actions.NewHandler(repo, msgSender, &stateManagerAdapter{stateMgr: stateMgr})
 
 	return &ClientHandler{
-		repo:                 repo,
-		msgSender:            msgSender,
-		notifySender:         notifySender,
-		stateMgr:             stateMgr,
-		cfg:                  cfg,
-		mainBotUsername:      mainBotUsername,
-		missingTorrentsCache: make(map[int64][]missingTorrentInfo),
-		checkResultsCache:    make(map[int64]*CheckResultsCache),
-		torrentFilesCache:    make(map[int64]*TorrentFileCache),
-		torrentMonitorCache:  make(map[int64]*TorrentMonitorCache),
-		torrentMonitorSvc:    monitoring.NewTorrentMonitorService(repo, msgSender, stateMgr.GetMenuMessage, stateMgr.SetMenuMessage),
-		torrentSearchSvc:     NewTorrentSearchService(repo, msgSender, stateMgr),
-		quickActionsHandler:  quickActionsHandler,
+		repo:                  repo,
+		msgSender:             msgSender,
+		notifySender:          notifySender,
+		stateMgr:              stateMgr,
+		cfg:                   cfg,
+		mainBotUsername:       mainBotUsername,
+		missingTorrentsCache:  make(map[int64][]missingTorrentInfo),
+		checkResultsCache:     make(map[int64]*CheckResultsCache),
+		torrentFilesCache:     make(map[int64]*TorrentFileCache),
+		torrentMonitorCache:   make(map[int64]*TorrentMonitorCache),
+		monitorStartHashCache: make(map[int64]string),
+		torrentMonitorSvc:     monitoring.NewTorrentMonitorService(repo, msgSender, stateMgr.GetMenuMessage, stateMgr.SetMenuMessage),
+		torrentSearchSvc:      NewTorrentSearchService(repo, msgSender, stateMgr),
+		quickActionsHandler:   quickActionsHandler,
 	}
 }
 
@@ -276,6 +279,12 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitor(chatId int64) {
 func (ch *ClientHandler) ShowClientsForTorrentMonitorWithHash(chatId int64, hash string) {
 	clients, ok := ch.getClientsOrPromptAdd(chatId, ui.MsgClientsForTorrentMonitorNoClients)
 	if ok {
+		hash = strings.TrimSpace(hash)
+		if hash == "" {
+			return
+		}
+		ch.monitorStartHashCache[chatId] = hash
+
 		text := ui.Msg(ui.MsgClientsForTorrentMonitorChooseClient)
 		var rows [][]tgbotapi.InlineKeyboardButton
 
@@ -287,7 +296,7 @@ func (ch *ClientHandler) ShowClientsForTorrentMonitorWithHash(chatId int64, hash
 			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 				ui.Data(
 					ui.Msgs(ui.MsgClientButtonLabelFmt, sslText, client.Name),
-					fmt.Sprintf("monitor_torrent_start_%d_%s", client.ID, hash)),
+					fmt.Sprintf("monitor_torrent_start_%d", client.ID)),
 			))
 		}
 

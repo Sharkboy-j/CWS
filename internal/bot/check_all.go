@@ -106,6 +106,93 @@ func (ch *ClientHandler) CheckAllClients(chatId int64) {
 	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
 }
 
+func (ch *ClientHandler) CheckAllClientsAuto(chatId int64) {
+	ctx := context.Background()
+
+	clients, err := ch.repo.GetAllClients(ctx, chatId)
+	if err != nil {
+		logger.Error("Ошибка при получении клиентов для пользователя %d: %v", chatId, err)
+
+		return
+	}
+	if len(clients) == 0 {
+		return
+	}
+
+	startTime := time.Now()
+
+	delete(ch.checkResultsCache, chatId)
+
+	var results []ClientCheckResult
+	for _, client := range clients {
+		results = append(results, ch.checkSingleClientAuto(ctx, client, chatId))
+	}
+
+	elapsed := time.Since(startTime)
+	logger.Debugf("Автопроверка клиентов выполнена для пользователя %d: %d клиентов, время выполнения: %v", chatId, len(clients), elapsed)
+
+	go ch.sendCheckUpdatesNotification(ctx, chatId, results)
+}
+
+func (ch *ClientHandler) checkSingleClientAuto(ctx context.Context, client *storage.Client, chatId int64) ClientCheckResult {
+	startTime := time.Now()
+	result := ClientCheckResult{
+		ClientName: client.Name,
+	}
+
+	qbClient, err := qbit.New(ctx, client)
+	if err != nil {
+		result.Error = fmt.Sprintf("Ошибка подключения: %v", err)
+		result.Duration = time.Since(startTime)
+
+		return result
+	}
+
+	activeTorrents, err := qbClient.GetTorrents(ctx)
+	if err != nil {
+		result.Error = fmt.Sprintf("Ошибка получения торрентов: %v", err)
+		result.Duration = time.Since(startTime)
+
+		return result
+	}
+	result.ActiveTorrents = len(activeTorrents)
+
+	torrents, err := qbClient.FilterTorrentsByRutrackerComment(ctx, activeTorrents)
+	if err != nil {
+		result.Error = fmt.Sprintf("Ошибка фильтрации: %v", err)
+		result.Duration = time.Since(startTime)
+
+		return result
+	}
+	result.FilteredTorrents = len(torrents)
+
+	if len(torrents) == 0 {
+		result.Duration = time.Since(startTime)
+
+		return result
+	}
+
+	torrentByHash := make(map[string]qbittorrent.Torrent)
+	for _, torrent := range torrents {
+		torrentByHash[torrent.InfohashV1] = torrent
+	}
+
+	hashBatches := qbit.GetHashStrings(torrents)
+
+	rutrackerResults, err := rutracker.GetIdByHashes(hashBatches, ch.cfg)
+	if err != nil {
+		result.Error = fmt.Sprintf("Ошибка API рутрекера: %v", err)
+		result.Duration = time.Since(startTime)
+
+		return result
+	}
+
+	result.FoundInRutracker, result.MissingTorrents = processRutrackerResults(ctx, qbClient, torrentByHash, rutrackerResults)
+	result.Duration = time.Since(startTime)
+
+	return result
+}
+
 func (ch *ClientHandler) sendAllClientsCheckResult(ctx context.Context, chatId int64, messageID int,
 	results []ClientCheckResult, elapsed time.Duration, now time.Time) (int, error) {
 	allMissingTorrents := ch.collectAllMissingTorrents(results)

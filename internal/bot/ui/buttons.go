@@ -536,7 +536,7 @@ var buttonResources = map[ButtonID]buttonResource{
 	PauseTorrent: {
 		data: "monitor_pause",
 		text: map[Locale]string{
-			LocaleRU: "⏸ Остановить раздачу",
+			LocaleRU: "⏸ Остановить",
 			LocaleEN: "⏸ Pause torrent",
 		},
 	},
@@ -1291,8 +1291,8 @@ var msgResources = map[MsgID]map[Locale]string{
 		LocaleEN: " *%s*\n\n",
 	},
 	MsgTorrentProgressPathFmt: {
-		LocaleRU: "📁 *%s*\n\n",
-		LocaleEN: "📁 *%s*\n\n",
+		LocaleRU: "📁 `%s`\n\n",
+		LocaleEN: "📁 `%s`\n\n",
 	},
 	MsgTorrentProgressStatusFmt: {
 		LocaleRU: "Статус: %s\n",

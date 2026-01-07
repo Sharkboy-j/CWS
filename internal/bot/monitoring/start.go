@@ -151,10 +151,12 @@ func (tms *torrentMonitorService) updateTorrentProgress(ctx context.Context, mon
 	if isActive {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.PauseTorrent, fmt.Sprintf("monitor_pause_%d_%s", monitor.ClientID, monitor.Hash)),
+			ui.ButtonWithData(ui.Delete, fmt.Sprintf("monitor_delete_%d_%s", monitor.ClientID, monitor.Hash)),
 		))
 	} else {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			ui.ButtonWithData(ui.ResumeTorrent, fmt.Sprintf("monitor_resume_%d_%s", monitor.ClientID, monitor.Hash)),
+			ui.ButtonWithData(ui.Delete, fmt.Sprintf("monitor_delete_%d_%s", monitor.ClientID, monitor.Hash)),
 		))
 	}
 
@@ -224,7 +226,7 @@ func (tms *torrentMonitorService) formatTorrentProgress(torrent *qbittorrent.Tor
 
 	text := ui.Msg(ui.MsgTorrentProgressHeaderText)
 	text += ui.Msgs(ui.MsgTorrentProgressNameFmt, textutil.EscapeMarkdown(torrent.Name))
-	text += ui.Msgs(ui.MsgTorrentProgressPathFmt, textutil.EscapeMarkdown(torrent.SavePath))
+	text += ui.Msgs(ui.MsgTorrentProgressPathFmt, torrent.SavePath)
 	text += ui.Msgs(ui.MsgTorrentProgressStatusFmt, status)
 	text += ui.Msgs(ui.MsgTorrentProgressPercentFmt, progress)
 	text += ui.Msgs(ui.MsgTorrentProgressDownloadFmt, ui.FormatSpeedBytes(torrent.DlSpeed))

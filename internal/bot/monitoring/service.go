@@ -9,6 +9,7 @@ import (
 type TorrentMonitorService interface {
 	StartTorrentMonitoring(ctx context.Context, chatId int64, clientID int64, hash string)
 	StopTorrentMonitoring(chatId int64)
+	IsTorrentMonitoringActive(chatId int64) bool
 }
 
 type TorrentMonitor struct {

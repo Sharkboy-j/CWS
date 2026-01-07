@@ -111,7 +111,11 @@ func NewBotService(token string, repo *storage.Repository, cfg *config.Config) (
 
 func (bs *Service) Start(ctx context.Context) error {
 	if bs.notifyBot != nil {
-		go StartNotifyBot(ctx, bs.notifyBot, bs.repo)
+		mainBotUsername := ""
+		if bs.telegramService != nil && bs.telegramService.GetBot() != nil {
+			mainBotUsername = bs.telegramService.GetBot().Self.UserName
+		}
+		go StartNotifyBotWithMainUsername(ctx, bs.notifyBot, bs.repo, mainBotUsername)
 	}
 
 	return bs.telegramService.Start(ctx)

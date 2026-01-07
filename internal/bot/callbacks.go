@@ -6,6 +6,7 @@ import (
 	"cws/internal/dialogstate"
 	"cws/internal/telegram/messaging"
 	"cws/logger"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -293,6 +294,12 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.handleMonitorPause(chatId, data)
 	case strings.HasPrefix(data, "monitor_resume_"):
 		ch.handleMonitorResume(chatId, data)
+	case strings.HasPrefix(data, "monitor_delete_confirm_"):
+		ch.handleMonitorDeleteConfirm(chatId, data)
+	case strings.HasPrefix(data, "monitor_delete_cancel_"):
+		ch.handleMonitorDeleteCancel(chatId, data)
+	case strings.HasPrefix(data, "monitor_delete_"):
+		ch.handleMonitorDelete(chatId, data)
 	case data == "edit_recommended_torrents":
 		if ch.cmdHdlr != nil {
 			ch.cmdHdlr.ShowEditRecommendedTorrents(chatId)
@@ -320,20 +327,30 @@ func (ch *CallbackHandler) handleMonitorTorrentClient(chatId int64, data string)
 func (ch *CallbackHandler) handleMonitorTorrentStart(chatId int64, data string) {
 	rest := strings.TrimPrefix(data, "monitor_torrent_start_")
 	parts := strings.SplitN(rest, "_", 2)
-	if len(parts) != 2 {
+
+	clientIDStr := ""
+	hash := ""
+	if len(parts) == 2 {
+		clientIDStr = parts[0]
+		hash = strings.TrimSpace(parts[1])
+	} else if len(parts) == 1 {
+		clientIDStr = parts[0]
+		cached, exists := ch.clientHdlr.monitorStartHashCache[chatId]
+		if exists {
+			hash = strings.TrimSpace(cached)
+		}
+	} else {
 		logger.Warn("Invalid monitor start callback format from user %d: %s", chatId, data)
 
 		return
 	}
 
-	clientID, err := strconv.ParseInt(parts[0], 10, 64)
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
 	if err != nil {
-		logger.Warn("Invalid client ID in monitor start callback from user %d: %s", chatId, parts[0])
+		logger.Warn("Invalid client ID in monitor start callback from user %d: %s", chatId, clientIDStr)
 
 		return
 	}
-
-	hash := strings.TrimSpace(parts[1])
 	if hash == "" {
 		return
 	}
@@ -476,6 +493,145 @@ func (ch *CallbackHandler) handleMonitorResume(chatId int64, data string) {
 		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msg(ui.MsgErrorResumeTorrent), nil)
 
 		return
+	}
+}
+
+func (ch *CallbackHandler) handleMonitorDelete(chatId int64, data string) {
+	prefix := "monitor_delete_"
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Invalid monitor delete callback format from user %d: %s", chatId, data)
+
+		return
+	}
+
+	clientIDStr := parts[0]
+	hash := strings.TrimSpace(parts[1])
+	if hash == "" {
+		return
+	}
+
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Invalid client ID in monitor delete callback from user %d: %s", chatId, clientIDStr)
+
+		return
+	}
+
+	ch.clientHdlr.torrentMonitorSvc.StopTorrentMonitoring(chatId)
+
+	text := ui.Msg(ui.MsgDeleteFilesQuestionText)
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			ui.ButtonWithData(ui.DeleteFilesYes, fmt.Sprintf("monitor_delete_confirm_%d_%s_true", clientID, hash)),
+			ui.ButtonWithData(ui.DeleteFilesNo, fmt.Sprintf("monitor_delete_confirm_%d_%s_false", clientID, hash)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			ui.ButtonWithData(ui.Cancel, fmt.Sprintf("monitor_delete_cancel_%d_%s", clientID, hash)),
+		),
+	)
+
+	messageID := ch.stateMgr.GetMenuMessage(chatId)
+	newMessageID, sendErr := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if sendErr != nil {
+		logger.Error("Error sending monitor delete confirmation to user %d: %v", chatId, sendErr)
+
+		return
+	}
+	if newMessageID != 0 && newMessageID != messageID {
+		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
+	}
+}
+
+func (ch *CallbackHandler) handleMonitorDeleteCancel(chatId int64, data string) {
+	prefix := "monitor_delete_cancel_"
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 {
+		logger.Warn("Invalid monitor delete cancel callback format from user %d: %s", chatId, data)
+
+		return
+	}
+
+	clientIDStr := parts[0]
+	hash := strings.TrimSpace(parts[1])
+	if hash == "" {
+		return
+	}
+
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Invalid client ID in monitor delete cancel callback from user %d: %s", chatId, clientIDStr)
+
+		return
+	}
+
+	ctx := context.Background()
+	ch.clientHdlr.torrentMonitorSvc.StartTorrentMonitoring(ctx, chatId, clientID, hash)
+}
+
+func (ch *CallbackHandler) handleMonitorDeleteConfirm(chatId int64, data string) {
+	prefix := "monitor_delete_confirm_"
+	rest := strings.TrimPrefix(data, prefix)
+	parts := strings.SplitN(rest, "_", 3)
+	if len(parts) != 3 {
+		logger.Warn("Invalid monitor delete confirm callback format from user %d: %s", chatId, data)
+
+		return
+	}
+
+	clientIDStr := parts[0]
+	hash := strings.TrimSpace(parts[1])
+	deleteFilesStr := strings.TrimSpace(parts[2])
+	if hash == "" || deleteFilesStr == "" {
+		return
+	}
+
+	clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+	if err != nil {
+		logger.Warn("Invalid client ID in monitor delete confirm callback from user %d: %s", chatId, clientIDStr)
+
+		return
+	}
+
+	deleteFiles, err := strconv.ParseBool(deleteFilesStr)
+	if err != nil {
+		logger.Warn("Invalid deleteFiles flag in monitor delete confirm callback from user %d: %s", chatId, deleteFilesStr)
+
+		return
+	}
+
+	ctx := context.Background()
+	qbClient, client, ok := ch.clientHdlr.getQbClientByIDOrReply(ctx, chatId, clientID)
+	if ok {
+	} else {
+		return
+	}
+
+	err = qbClient.DeleteTorrent(ctx, hash, deleteFiles)
+	if err != nil {
+		logger.Error("Error deleting torrent %s for user %d: %v", hash, chatId, err)
+		_, _ = ch.msgSender.SendOrEdit(chatId, 0, ui.Msgs(ui.MsgErrorDeleteTorrentFmt, err), nil)
+
+		return
+	}
+
+	filesText := ""
+	if deleteFiles {
+		filesText = ui.Msg(ui.MsgTorrentDeletedFilesSuffix)
+	}
+	text := ui.Msgs(ui.MsgTorrentDeletedSuccessFmt, filesText, client.Name)
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			ui.Button(ui.BackToTorrents),
+			ui.Button(ui.MainMenu),
+		),
+	)
+	messageID := ch.stateMgr.GetMenuMessage(chatId)
+	newMessageID, _ := ch.msgSender.SendOrEdit(chatId, messageID, text, &keyboard)
+	if newMessageID != 0 && newMessageID != messageID {
+		ch.stateMgr.SetMenuMessage(chatId, newMessageID)
 	}
 }
 
