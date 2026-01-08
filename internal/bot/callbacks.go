@@ -238,6 +238,8 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		}
 	case strings.HasPrefix(data, "delete_client_"):
 		ch.handleDeleteClient(chatId, data)
+	case strings.HasPrefix(data, "confirm_delete_torrent_"):
+		ch.handleConfirmDeleteTorrent(chatId, data)
 	case strings.HasPrefix(data, "confirm_delete_"):
 		ch.handleConfirmDelete(chatId, data)
 	case strings.HasPrefix(data, "edit_client_"):
@@ -273,8 +275,6 @@ func (ch *CallbackHandler) HandleCallbackQuery(query *tgbotapi.CallbackQuery) {
 		ch.handleDeleteExistingTorrent(chatId, data)
 	case strings.HasPrefix(data, "keep_existing_torrent_"):
 		ch.handleKeepExistingTorrent(chatId, data)
-	case strings.HasPrefix(data, "confirm_delete_torrent_"):
-		ch.handleConfirmDeleteTorrent(chatId, data)
 	case strings.HasPrefix(data, "monitor_torrent_client_"):
 		ch.handleMonitorTorrentClient(chatId, data)
 	case strings.HasPrefix(data, "monitor_torrent_start_"):

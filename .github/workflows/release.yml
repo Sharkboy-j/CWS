@@ -40,8 +40,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: linux/amd64
-            runner: [self-hosted, amd64]
+#          - platform: linux/amd64
+#            runner: [self-hosted, amd64]
           - platform: linux/arm64
             runner: [self-hosted, arm64]
     runs-on: ${{ matrix.runner }}
@@ -119,9 +119,8 @@ jobs:
         docker buildx imagetools create \
           -t ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:latest \
           -t ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION \
-          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-amd64 \
           ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-arm64
-
+#          ${{ env.REGISTRY }}/${{ env.DOCKERHUB_USER }}/cws:$VERSION-amd64
 
   create-release:
     runs-on: [self-hosted, arm64]
@@ -159,12 +158,44 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  notify-portainer:
-    runs-on: [ self-hosted, arm64 ]
+#  notify-portainer:
+#    runs-on: [ self-hosted, arm64 ]
+#    needs: docker-manifest
+#    steps:
+#      - name: Redeploy
+#        run: |
+#          curl -k -X POST \
+#            -H "Content-Type: application/json" \
+#            ${{ secrets.PORTAINER_WEBHOOK_URL }}
+  update-rancher-deployment:
+    runs-on: [self-hosted, arm64]
     needs: docker-manifest
     steps:
-      - name: Redeploy
+      - name: Extract version from tag
+        id: tag
         run: |
-          curl -k -X POST \
-            -H "Content-Type: application/json" \
-            ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update CWS Deployment
+        env:
+          K8S_SERVER: ${{ secrets.K8S_SERVER }}
+          K8S_TOKEN: ${{ secrets.K8S_TOKEN }}
+          REGISTRY: ghcr.io
+          DOCKERHUB_USER: sharkboy-j
+          DEPLOYMENT: cws
+          NAMESPACE: default
+        run: |
+          export KUBECONFIG=$(mktemp)
+  
+          kubectl config set-cluster k3s-cluster \
+            --server=$K8S_SERVER \
+            --insecure-skip-tls-verify=true
+          kubectl config set-credentials admin --token=$K8S_TOKEN
+          kubectl config set-context k3s-context \
+            --cluster=k3s-cluster \
+            --user=admin
+          kubectl config use-context k3s-context
+  
+          kubectl -n $NAMESPACE set image deployment/$DEPLOYMENT \
+            $DEPLOYMENT=${REGISTRY}/${DOCKERHUB_USER}/cws:${{ steps.tag.outputs.version }}
