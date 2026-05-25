@@ -22,10 +22,18 @@ func processRutrackerResults(ctx context.Context, qbClient qbit.Service, torrent
 	}
 
 	var missingTorrents []missingTorrentInfo
+	var absentFromResponse int
+	var nullTopicID int
 
 	if rutrackerResults != nil {
 		for hash, torrent := range torrentByHash {
 			topicID, exists := rutrackerResults[hash]
+			if !exists {
+				absentFromResponse++
+			} else if topicID == nil {
+				nullTopicID++
+			}
+
 			if !exists || topicID == nil {
 				props, err := qbClient.GetTorrentPropertiesCached(ctx, torrent.Hash)
 				url := ""
@@ -53,6 +61,11 @@ func processRutrackerResults(ctx context.Context, qbClient qbit.Service, torrent
 			})
 		}
 	}
+
+	logger.Info(
+		"RuTracker results: checked=%d found=%d missing=%d absent_from_api=%d null_topic_id=%d",
+		len(torrentByHash), foundCount, len(missingTorrents), absentFromResponse, nullTopicID,
+	)
 
 	return foundCount, missingTorrents
 }

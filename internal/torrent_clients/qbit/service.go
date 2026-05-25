@@ -117,7 +117,7 @@ func New(ctx context.Context, client *storage.Client) (Service, error) {
 		return nil, fmt.Errorf("failed to read login response: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		logger.Error("Ошибка аутентификации: статус %d, ответ: %s", resp.StatusCode, string(body))
 
 		return nil, fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
@@ -133,11 +133,17 @@ func New(ctx context.Context, client *storage.Client) (Service, error) {
 	cookies := resp.Cookies()
 	var sessionCookie *http.Cookie
 	for _, cookie := range cookies {
-		if cookie.Name == "SID" {
+		if cookie.Name == "SID" || strings.HasPrefix(cookie.Name, "QBT_SID") {
 			sessionCookie = cookie
 
 			break
 		}
+	}
+
+	if sessionCookie == nil && responseText != "Ok." && len(cookies) == 0 {
+		logger.Error("Cookie сессии не найден и ответ не содержит Ok.")
+
+		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if sessionCookie == nil {

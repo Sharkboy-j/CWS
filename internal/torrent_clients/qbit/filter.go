@@ -2,6 +2,7 @@ package qbit
 
 import (
 	"context"
+	"cws/logger"
 	"strings"
 	"sync"
 
@@ -26,9 +27,11 @@ func (s *service) FilterTorrentsByRutrackerComment(ctx context.Context, torrents
 	var (
 		filteredTorrents []qbittorrent.Torrent
 		mu               sync.Mutex
+		propertiesErrors int
 	)
 
 	totalBatches := (len(torrents) + batchSize - 1) / batchSize
+	logger.Debug("RuTracker filter: checking %d torrents in %d batches", len(torrents), totalBatches)
 
 	for batchIndex := 0; batchIndex < totalBatches; batchIndex++ {
 		start := batchIndex * batchSize
@@ -47,6 +50,11 @@ func (s *service) FilterTorrentsByRutrackerComment(ctx context.Context, torrents
 
 				props, err := s.GetTorrentPropertiesCached(ctx, torrent.Hash)
 				if err != nil {
+					mu.Lock()
+					propertiesErrors++
+					mu.Unlock()
+					logger.Warn("RuTracker filter: failed to get properties for torrent %s (%s): %v", torrent.Hash, torrent.Name, err)
+
 					return
 				}
 
@@ -61,6 +69,11 @@ func (s *service) FilterTorrentsByRutrackerComment(ctx context.Context, torrents
 
 		wg.Wait()
 	}
+
+	logger.Info(
+		"RuTracker filter: matched %d/%d torrents, properties errors=%d",
+		len(filteredTorrents), len(torrents), propertiesErrors,
+	)
 
 	return filteredTorrents, nil
 }
