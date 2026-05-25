@@ -6,6 +6,8 @@ import (
 	"github.com/autobrr/go-qbittorrent"
 )
 
+const rutrackerHashBatchSize = 50
+
 func GetHashStrings(torrents []qbittorrent.Torrent) []string {
 	hashes := make([]string, 0)
 	hashStrings := make([]string, 0)
@@ -14,7 +16,7 @@ func GetHashStrings(torrents []qbittorrent.Torrent) []string {
 	for _, v := range torrents {
 		hashes = append(hashes, v.InfohashV1)
 		counter++
-		if counter == 99 {
+		if counter == rutrackerHashBatchSize {
 			hashStrings = append(hashStrings, strings.Join(hashes, ","))
 			hashes = make([]string, 0)
 			counter = 0

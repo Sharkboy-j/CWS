@@ -4,7 +4,7 @@
 REGISTRY ?= ghcr.io
 DOCKERHUB_USER ?= sharkboy-j
 TAG ?= latest
-VERSION ?=2.0
+VERSION ?=2.1
 PLATFORMS ?= linux/amd64,linux/arm64
 
 API_IMAGE ?= $(REGISTRY)/$(DOCKERHUB_USER)/cws

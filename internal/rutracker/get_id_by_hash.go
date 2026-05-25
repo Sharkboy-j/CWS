@@ -13,8 +13,13 @@ type hashAndNum struct {
 }
 
 type apiErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message"`
+	Error   json.RawMessage `json:"error"`
+	Message string          `json:"message"`
+}
+
+type apiErrorDetails struct {
+	Code int    `json:"code"`
+	Text string `json:"text"`
 }
 
 func GetIdByHashes(hashes []string, cfg *config.Config) (map[string]*int, error) {
@@ -94,18 +99,8 @@ func GetIdByHashes(hashes []string, cfg *config.Config) (map[string]*int, error)
 }
 
 func parse(data []byte) (map[string]*int, error) {
-	var apiErr apiErrorResponse
-	if err := json.Unmarshal(data, &apiErr); err == nil {
-		if apiErr.Error != "" {
-			logger.Error("RuTracker API error response: error=%s message=%s", apiErr.Error, apiErr.Message)
-
-			return nil, fmt.Errorf("api error: %s", apiErr.Error)
-		}
-		if apiErr.Message != "" && !strings.Contains(string(data), `"result"`) {
-			logger.Error("RuTracker API message response: message=%s body=%s", apiErr.Message, truncateBody(data, 500))
-
-			return nil, fmt.Errorf("api message: %s", apiErr.Message)
-		}
+	if apiErr := parseAPIError(data); apiErr != nil {
+		return nil, apiErr
 	}
 
 	var p hashAndNum
@@ -121,6 +116,41 @@ func parse(data []byte) (map[string]*int, error) {
 	}
 
 	return p.Result, nil
+}
+
+func parseAPIError(data []byte) error {
+	var envelope apiErrorResponse
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil
+	}
+
+	if len(envelope.Error) == 0 {
+		if envelope.Message != "" && !strings.Contains(string(data), `"result"`) {
+			logger.Error("RuTracker API message response: message=%s body=%s", envelope.Message, truncateBody(data, 500))
+
+			return fmt.Errorf("api message: %s", envelope.Message)
+		}
+
+		return nil
+	}
+
+	var details apiErrorDetails
+	if err := json.Unmarshal(envelope.Error, &details); err == nil && details.Text != "" {
+		logger.Error("RuTracker API error response: code=%d text=%s", details.Code, details.Text)
+
+		return fmt.Errorf("api error: %s", details.Text)
+	}
+
+	var errorText string
+	if err := json.Unmarshal(envelope.Error, &errorText); err == nil && errorText != "" {
+		logger.Error("RuTracker API error response: error=%s", errorText)
+
+		return fmt.Errorf("api error: %s", errorText)
+	}
+
+	logger.Error("RuTracker API error response: body=%s", truncateBody(data, 500))
+
+	return fmt.Errorf("api error: %s", truncateBody(envelope.Error, 200))
 }
 
 func countHashesInBatches(batches []string) int {
